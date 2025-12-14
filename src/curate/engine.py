@@ -17,10 +17,56 @@ class Action(Enum):
     not to structural operations.
     """
 
-    TOGGLE_LOCAL = "toggle_local"      # leader+t
-    TOGGLE_CODE = "toggle_code"        # leader+T (code)
-    TOGGLE_DOCS = "toggle_docs"        # leader+T (docs)
-    TOGGLE_MINIMUM = "toggle_minimum"  # leader+T (minimum)
+    TOGGLE_LOCAL = "local"      # leader+t
+    TOGGLE_CODE = "code"        # leader+T (code)
+    TOGGLE_DOCS = "docs"        # leader+T (docs)
+    TOGGLE_MINIMUM = "minimum"  # leader+T (minimum)
+
+
+def payload_for_action(scope, cursor_line: int, action: str) -> dict:
+    """
+    Convenience API for tests and Lua client: return JSON-like payload
+    with `folds` for the given action.
+    """
+    # Map string to Action
+    action_map = {
+        "local": Action.TOGGLE_LOCAL,
+        "minimum": Action.TOGGLE_MINIMUM,
+        "code": Action.TOGGLE_CODE,
+        "docs": Action.TOGGLE_DOCS,
+    }
+    if action not in action_map:
+        raise ValueError(f"Unknown action: {action}")
+
+    # Compute ranges
+    ranges = ()
+    if isinstance(scope, str):
+        # If scope provided as text, analyze first
+        ranges = fold_for_cursor(scope, cursor_line, action_map[action])
+    else:
+        # Scope object → reuse query helpers
+        # Use same logic as fold_for_cursor but bypass analyze_text
+        if action_map[action] == Action.TOGGLE_LOCAL:
+            from .query import best_entity_at_line
+            entity = best_entity_at_line(scope, cursor_line)
+            if entity and entity.body and any(l.number == cursor_line and l.text.strip() for l in entity.body):
+                start = entity.body[0].number
+                end = entity.body[-1].number
+                ranges = ((start, end),)
+            else:
+                ranges = ()
+        else:
+            from .foldplan import fold_plan_for_view
+            from .views import ViewMode
+            view = {
+                Action.TOGGLE_MINIMUM: ViewMode.MINIMUM,
+                Action.TOGGLE_CODE: ViewMode.CODE_ONLY,
+                Action.TOGGLE_DOCS: ViewMode.DOCS_ONLY,
+            }[action_map[action]]
+            ranges = fold_plan_for_view(scope, view)
+
+    # Format as payload
+    return {"folds": [{"start": s, "end": e} for (s, e) in ranges]}
 
 
 def fold_for_cursor(

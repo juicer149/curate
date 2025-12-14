@@ -6,13 +6,13 @@ build-backend = "setuptools.build_meta"
 name = "curate"
 version = "0.1.0"
 requires-python = ">=3.10"
+dependencies = []
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [project.scripts]
 curate = "curate.cli:main"
-
 
 # ============================================================
 # Pytest + coverage

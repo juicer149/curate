@@ -1,16 +1,18 @@
-import json
 import argparse
+import json
+import sys
+
 from .engine import fold_for_cursor, Action
 from .query import best_entity_at_line
 from .api import analyze_text
 
 
-def main():
-    p = argparse.ArgumentParser()
-    p.add_argument("file")
-    p.add_argument("--line", type=int, required=True)
-    p.add_argument("--action", required=True)
-    args = p.parse_args()
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="curate")
+    parser.add_argument("file")
+    parser.add_argument("--line", type=int, required=True)
+    parser.add_argument("--action", required=True)
+    args = parser.parse_args(argv)
 
     action_map = {
         "local": Action.TOGGLE_LOCAL,
@@ -19,7 +21,11 @@ def main():
         "docs": Action.TOGGLE_DOCS,
     }
 
-    action = action_map[args.action]
+    try:
+        action = action_map[args.action]
+    except KeyError:
+        sys.stderr.write("Unknown action: {}\n".format(args.action))
+        return 2
 
     src = open(args.file, "r", encoding="utf8").read()
     root = analyze_text(src)
@@ -40,3 +46,8 @@ def main():
     }
 
     print(json.dumps(payload))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,3 +1,16 @@
+.PHONY: test-lua
+test-lua:
+	~/.luarocks/bin/busted tests/lua --pattern=_spec.lua -v
+
+.PHONY: test-lua-client
+test-lua-client:
+	lua tests/lua/curate/client_harness.lua
+
+.PHONY: test-all
+test-all:
+	pytest -q
+	~/.luarocks/bin/busted tests/lua --pattern=_spec.lua -v
+	lua tests/lua/curate/client_harness.lua
 # Virtual environment
 VENV := .venv
 PYTHON := $(VENV)/bin/python

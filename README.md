@@ -179,31 +179,9 @@ For details, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
-## Testing
-
-Run all tests:
-
-```bash
-pytest
-```
-
-With coverage:
-
-```bash
-pytest --cov=curate --cov-report=term-missing
-```
-
-The core is heavily tested to ensure:
-
-* stable semantics
-* correct folding behaviour
-* safe editor integration
-
----
-
 ## Editor Integration (Neovim)
 
-Curate is designed to be called from Lua:
+Curate is designed to be called from Lua (or any editor language):
 
 ```lua
 -- pseudo-code
@@ -218,6 +196,63 @@ Curate:
 * never assumes UI behaviour
 
 This keeps the integration simple and robust.
+
+### Editor ↔ Engine Contract
+
+Editors are expected to:
+
+1. Provide:
+
+   * full buffer text (or a temporary file)
+   * a 1-based cursor line
+   * an explicit semantic action
+
+2. Invoke Curate as a pure function:
+
+```text
+python -m curate <file> --line <N> --action <local|minimum|code|docs>
+```
+
+3. Consume JSON output of the form:
+
+```json
+{
+  "folds": [
+    { "start": 10, "end": 25 },
+    { "start": 40, "end": 72 }
+  ]
+}
+```
+
+4. Apply folds using editor-native mechanisms.
+
+Curate guarantees:
+
+* inclusive line ranges (`start <= end`)
+* non-overlapping, ordered folds
+* deterministic output for identical input
+* no side effects or editor state assumptions
+
+A reference Neovim client implementation exists and is tested, but is intentionally kept outside the core engine.
+
+---
+
+## Testing
+
+See `TESTING.md` for an overview of the test strategy, contracts, and
+commands for running Python and Lua tests.
+
+Run everything with:
+
+```bash
+make test-all
+```
+
+The core is heavily tested to ensure:
+
+* stable semantics
+* correct folding behaviour
+* safe editor integration
 
 ---
 
@@ -241,5 +276,3 @@ Curate is:
 * under active development
 
 The API is expected to remain stable.
-
----
