@@ -1,0 +1,38 @@
+# ----------------------------------------
+# Python
+# ----------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+.env
+.envrc
+.direnv/
+
+# Build artifacts
+build/
+dist/
+
+# ----------------------------------------
+# Neovim / Lua
+# ----------------------------------------
+.nvim/
+.lua/
+luac.out
+
+# ----------------------------------------
+# OS / Editor
+# ----------------------------------------
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "curate"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[project.scripts]
+curate = "curate.cli:main"
+
+
+# ============================================================
+# Pytest + coverage
+# ============================================================
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+addopts = [
+    "--cov=curate",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["curate"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
