@@ -1,246 +1,256 @@
 # Curate
 
 **Curate** is a semantic code structure analyzer designed to power
-editor features such as **context-aware folding**, **documentation views**
+editor features such as **context-aware folding**, **documentation views**,
 and **structural navigation**.
 
-Curate separates **semantic understanding** from **editor behaviour**.
+Curate cleanly separates:
+
+- **semantic understanding** (Python)
+- **editor behavior** (Lua / Neovim)
 
 > You tell Curate *what the code is*.  
 > Your editor decides *how to show it*.
 
 ---
 
-## Why Curate?
+## What Curate Is (and Is Not)
 
-Traditional folding is:
-- indentation-based
-- syntax-based
-- unaware of documentation vs code
+Curate is:
 
-Curate instead builds a **semantic model** of your source code and lets
-you fold, view, and navigate based on *meaning*.
+- semantic (AST + text aware)
+- deterministic
+- stateless
+- editor-agnostic at its core
+- designed for integration, not UI
 
-Examples:
-- Fold only code, keep docs visible
-- Fold only docs, keep code visible
-- Fold everything inside the current class
-- Fold just the body of the function under the cursor
-- Show only class / function headers
+Curate is **not**:
 
----
-
-## Features
-
-### ✅ Implemented
-- Python source analysis via AST
-- Explicit docstring extraction
-- Docstring HEAD / BODY split
-- Semantic entities (module, class, function, docstring)
-- Lexical scope tree
-- Line-based semantic queries
-- Deterministic fold plans
-- Editor-facing fold engine
-- 100% deterministic, stateless core
-- Extensive test coverage
-
-### 🚧 Planned / Optional
-- Indentation-based block entities (`if`, `try`, `match`, …)
-- Outline / symbol view generation
-- Support for other languages
-- Editor plugins (Neovim first)
+- an editor plugin by itself
+- a folding UI
+- stateful or incremental (v0.1)
+- tied to Neovim internally
 
 ---
 
-## Installation
+## High-level Architecture
+
+```
+
+Neovim (Lua)
+│
+│  buffer text + cursor line + intent
+▼
+Python CLI / Engine
+│
+│  semantic fold ranges (JSON)
+▼
+Neovim applies folds
+
+```
+
+Key idea:
+
+> **Python decides semantics. Lua applies effects.**
+
+---
+
+## Python Engine (Semantic Core)
+
+The Python backend lives in:
+
+```
+
+src/curate/
+
+```
+
+It is responsible for:
+
+- Parsing Python source code
+- Building a semantic model:
+  - Lines
+  - Entities (classes, functions, docstrings)
+  - Scopes
+- Separating documentation from code
+- Computing deterministic fold plans
+- Exposing a small, stable editor-facing API
+
+The engine is:
+- pure
+- stateless
+- fully testable without an editor
+
+See:
+```
+
+src/curate/README.md
+
+```
+for full engine documentation.
+
+---
+
+## Lua Client (Neovim Integration)
+
+The Lua side lives in:
+
+```
+
+lua/curate/
+
+```
+
+It is responsible for:
+
+- Capturing editor state (buffer contents, cursor line)
+- Calling the Python engine via `python -m curate`
+- Parsing JSON responses
+- Applying folds using Neovim commands
+- Defining user-facing keybindings
+
+The Lua client contains **no semantic logic**.
+
+It treats the Python engine as a black box.
+
+See:
+```
+
+lua/curate/README.md
+
+````
+for Lua-side architecture and usage.
+
+---
+
+## The Contract Between Lua and Python
+
+Communication happens via **CLI + JSON only**.
+
+### Input (Lua → Python)
+
+Lua provides:
+- full buffer text (via a temporary file)
+- cursor line (1-based)
+- semantic action (`local`, `minimum`, `code`, `docs`)
+
+Example invocation:
+
+```bash
+python -m curate file.py --line 42 --action minimum
+````
+
+---
+
+### Output (Python → Lua)
+
+Python returns JSON:
+
+```json
+{
+  "action": "minimum",
+  "cursor_line": 42,
+  "entity": {
+    "kind": "function",
+    "name": "foo"
+  },
+  "folds": [
+    { "start": 10, "end": 38 }
+  ]
+}
+```
+
+Contract guarantees:
+
+* fold ranges are 1-based
+* fold ranges are inclusive
+* folds are ordered
+* folds never overlap
+* empty folds are valid and meaningful
+
+Lua **must not reinterpret semantics** — only apply folds.
+
+---
+
+## Semantic Actions
+
+Actions represent **user intent**, not implementation details.
+
+| Action    | Meaning                                      |
+| --------- | -------------------------------------------- |
+| `local`   | Fold the body of the entity under the cursor |
+| `minimum` | Show only entity heads                       |
+| `code`    | Hide code, show documentation                |
+| `docs`    | Hide documentation, show code                |
+
+Editors are free to bind these however they want.
+
+---
+
+## Neovim UX Philosophy
+
+The default Neovim behavior is intentionally simple:
+
+* If the cursor is already inside a fold → clear folds (`zE`)
+* Otherwise → compute and apply semantic folds
+
+This gives:
+
+* predictable toggling
+* no stored state
+* no desynchronization between editor and engine
+
+---
+
+## Installation (Development)
 
 Curate is currently intended for **local development and editor integration**.
 
 ```bash
 pip install -e .
-````
+```
 
 Requires:
 
 * Python ≥ 3.10
+* Neovim ≥ 0.9 (for `vim.system`)
 
 ---
 
-## Quick Start
+## Neovim Setup (Local Plugin)
 
-### Analyze a file (debug view)
-
-```bash
-python -m curate path/to/file.py
-```
-
-This prints a human-readable tree of:
-
-* scopes
-* entities
-* docstrings
-* heads and bodies
-
-Useful for debugging and understanding the model.
-
----
-
-### Use the engine (editor-facing)
-
-```python
-from curate import fold_for_cursor, Action
-
-folds = fold_for_cursor(
-    source_text=buffer_text,
-    cursor_line=29,
-    action=Action.TOGGLE_LOCAL,
-)
-```
-
-Returns:
-
-```python
-((start_line, end_line), ...)
-```
-
-Your editor applies the folds.
-
----
-
-## Engine Actions
-
-| Action           | Description                              |
-| ---------------- | ---------------------------------------- |
-| `TOGGLE_LOCAL`   | Fold the body of the entity under cursor |
-| `TOGGLE_CODE`    | Hide code in current scope               |
-| `TOGGLE_DOCS`    | Hide docs in current scope               |
-| `TOGGLE_MINIMUM` | Show only entity heads                   |
-
-These map naturally to editor keybindings like:
-
-* `leader + t`
-* `leader + T`
-
----
-
-## Public API
-
-Curate intentionally exposes a **small public surface**.
-
-### Entry points
-
-* `analyze_text(source_text)`
-* `analyze_file(path)`
-
-### Engine
-
-* `fold_for_cursor(...)`
-* `Action`
-
-### Queries (advanced)
-
-* `best_entity_at_line`
-* `entities_at_line`
-* `scope_at_line`
-* `parent_entity`
-* `direct_children`
-* `descendants`
-
-Everything else is considered internal.
-
----
-
-## Architecture
-
-Curate is structured as a pipeline:
-
-```
-Source Text
-    ↓
-Analyzer (AST + text)
-    ↓
-Semantic Model (Scope / Entity / Line)
-    ↓
-Queries / Views / Fold Plans
-    ↓
-Engine
-    ↓
-Editor (Lua, etc.)
-```
-
-Key properties:
-
-* editor-agnostic
-* stateless
-* deterministic
-* fully testable
-
-For details, see [`ARCHITECTURE.md`](ARCHITECTURE.md).
-
----
-
-## Editor Integration (Neovim)
-
-Curate is designed to be called from Lua (or any editor language):
+Example using a local plugin path:
 
 ```lua
--- pseudo-code
-local folds = call_python_engine(buffer_text, cursor_line, action)
-apply_folds(folds)
-```
-
-Curate:
-
-* never touches editor state
-* never tracks folded regions
-* never assumes UI behaviour
-
-This keeps the integration simple and robust.
-
-### Editor ↔ Engine Contract
-
-Editors are expected to:
-
-1. Provide:
-
-   * full buffer text (or a temporary file)
-   * a 1-based cursor line
-   * an explicit semantic action
-
-2. Invoke Curate as a pure function:
-
-```text
-python -m curate <file> --line <N> --action <local|minimum|code|docs>
-```
-
-3. Consume JSON output of the form:
-
-```json
-{
-  "folds": [
-    { "start": 10, "end": 25 },
-    { "start": 40, "end": 72 }
-  ]
+return {
+  dir = "~/code/packages/curate",
+  name = "curate",
+  ft = { "python" },
+  config = function()
+    require("curate").setup()
+  end,
 }
 ```
 
-4. Apply folds using editor-native mechanisms.
-
-Curate guarantees:
-
-* inclusive line ranges (`start <= end`)
-* non-overlapping, ordered folds
-* deterministic output for identical input
-* no side effects or editor state assumptions
-
-A reference Neovim client implementation exists and is tested, but is intentionally kept outside the core engine.
+Keybindings are installed with safe defaults and can be overridden.
 
 ---
 
 ## Testing
 
-See `TESTING.md` for an overview of the test strategy, contracts, and
-commands for running Python and Lua tests.
+Curate has **two independent test layers**:
+
+### Python
+
+* pytest
+* high coverage on semantic core
+* strict fold and JSON contract tests
+
+### Lua
+
+* Busted smoke tests
+* A custom harness with a stubbed `vim` API
+* Real client code tested without Neovim
 
 Run everything with:
 
@@ -248,22 +258,19 @@ Run everything with:
 make test-all
 ```
 
-The core is heavily tested to ensure:
-
-* stable semantics
-* correct folding behaviour
-* safe editor integration
+See `TESTING.md` for details.
 
 ---
 
-## Philosophy
+## Design Principles
 
-Curate follows a strict rule:
+Curate follows a few strict rules:
 
-> **Model first. UI second.**
-
-By making the semantic model correct and explicit,
-all editor features become easier and safer to implement.
+* **Model first. UI second.**
+* Semantics are explicit, never inferred in the editor
+* Editors are clients, not peers
+* Correctness > cleverness
+* Determinism over heuristics
 
 ---
 
@@ -275,4 +282,32 @@ Curate is:
 * suitable for real editor integration
 * under active development
 
-The API is expected to remain stable.
+The **engine API and CLI contract are expected to remain stable**.
+
+---
+
+## Roadmap (Non-binding)
+
+Possible future work:
+
+* indentation-based block entities
+* other languages
+* outline / symbol views
+* LSP-style integration
+* incremental analysis
+
+None of these change the core contract.
+
+---
+
+## Summary
+
+Curate works because:
+
+* Python owns meaning
+* Lua owns effects
+* The boundary is explicit and tested
+
+This makes editor features easier to build,
+easier to test,
+and harder to break.

@@ -116,4 +116,17 @@ do
   vim.json.decode = prev_decode
 end
 
+-- Test: multiple cursor positions
+local utils = require("tests.lua.utils")
+
+local lines = utils.seeded_lines(1, 79, 20, 42)
+
+for _, line in ipairs(lines) do
+  vim.api.nvim_win_get_cursor = function()
+    return { line, 0 }
+  end
+  client.fold_code()
+end
+
+
 print("client_harness: ALL TESTS OK")

@@ -6,25 +6,35 @@
 --   - Keys express *intent*
 --   - Python decides *what that intent means semantically*
 
+local M = {}
 local map = vim.keymap.set
 local curate = require("curate.client")
 
--- Fold / unfold the most local entity
-map("n", "<leader>f", curate.toggle_local, {
-  desc = "Curate: toggle local entity",
-})
+local DEFAULT_KEYS = {
+  local_fold = "<leader>f",
+  minimum    = "<leader>F",
+  code       = "<leader>fc",
+  docs       = "<leader>fd",
+}
 
--- Fold / unfold scope to minimum view
-map("n", "<leader>F", curate.toggle_minimum, {
-  desc = "Curate: toggle scope (minimum view)",
-})
+function M.setup(keys)
+  keys = vim.tbl_deep_extend("force", DEFAULT_KEYS, keys or {})
 
--- Fold / unfold code in scope
-map("n", "<leader>fc", curate.toggle_code, {
-  desc = "Curate: toggle code in scope",
-})
+  map("n", keys.local_fold, curate.fold_local, {
+    desc = "Curate: fold local entity",
+  })
 
--- Fold / unfold docs in scope
-map("n", "<leader>fd", curate.toggle_docs, {
-  desc = "Curate: toggle docs in scope",
-})
+  map("n", keys.minimum, curate.fold_minimum, {
+    desc = "Curate: minimum view",
+  })
+
+  map("n", keys.code, curate.fold_code, {
+    desc = "Curate: code only",
+  })
+
+  map("n", keys.docs, curate.fold_docs, {
+    desc = "Curate: docs only",
+  })
+end
+
+return M

@@ -36,3 +36,10 @@ source = ["curate"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-benchmark",
+]

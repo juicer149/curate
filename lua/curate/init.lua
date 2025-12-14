@@ -2,9 +2,18 @@
 --
 -- Curate Neovim plugin entrypoint.
 --
--- This module exists only to wire together the Lua-side components.
--- All real behaviour lives in:
---   - curate.client  (engine bridge)
---   - curate.keymaps (UX bindings)
+-- This module wires together the Lua-side components.
+-- It is intentionally minimal and fully backwards-compatible.
 
-require("curate.keymaps")
+local M = {}
+
+function M.setup(opts)
+  opts = opts or {}
+  require("curate.keymaps").setup(opts.keymaps)
+end
+
+-- Backwards compatibility:
+-- If user just `require("curate")`, install defaults immediately.
+M.setup()
+
+return M
