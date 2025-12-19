@@ -1,5 +1,10 @@
 """
-Entry point for `python -m curate`.
+CLI bootstrap.
+
+Allows:
+    python -m curate
+
+All logic lives in cli.py.
 """
 
 from .cli import main

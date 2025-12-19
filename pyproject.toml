@@ -32,6 +32,10 @@ addopts = [
 [tool.coverage.run]
 branch = true
 source = ["curate"]
+omit = [
+    "src/curate/cli.py",
+    "src/curate/__main__.py",
+]
 
 [tool.coverage.report]
 show_missing = true
@@ -39,7 +43,7 @@ skip_covered = false
 
 [project.optional-dependencies]
 dev = [
-  "pytest",
-  "pytest-cov",
-  "pytest-benchmark",
+    "pytest",
+    "pytest-cov",
+    "pytest-benchmark",
 ]

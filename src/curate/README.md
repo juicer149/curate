@@ -1,376 +1,292 @@
-# Curate – Python Engine
+# Curate – Core Engine (`src/curate/`)
 
-This directory contains the **semantic core** of Curate.
+This directory contains the **core engine and backends** for Curate.
 
-Everything here is:
-- editor-agnostic
-- stateless
-- deterministic
-- testable in isolation
+Curate is a structural folding engine designed to be editor-agnostic.
+Editors (e.g. Neovim) act as thin frontends that provide cursor position
+and file contents, while Curate computes **structural fold ranges**
+based on language-aware backends.
 
-The Python engine is the **single source of truth**.
-Editor integrations (Lua, etc.) merely invoke it.
-
----
-
-## Responsibilities
-
-The Python backend is responsible for:
-
-- Parsing Python source code
-- Building a semantic model (scopes, entities, lines)
-- Classifying code vs documentation
-- Producing deterministic fold plans
-- Answering structural queries for editor features
-
-It does **not**:
-- track editor state
-- manage folds
-- care about UI behavior
-- cache results
+This README documents **Curate v1 semantics**, as implemented and
+validated by tests.
 
 ---
 
-## High-level Architecture
+## High-level architecture
 
 ```
 
-Source Text
-↓
-Analyzer (AST + text)
-↓
-Semantic Model
-
-* Line
-* Entity
-* Scope
-  ↓
-  Queries / Views
-  ↓
-  Fold Plan
-  ↓
-  Engine (fold_for_cursor)
+editor (Lua / Vim / etc)
+|
+v
+Config (file_type, content, cursor, level, fold_children)
+|
+v
+engine.fold(cfg)
+|
+v
+backend_factory.get_backend(file_type)
+|
+v
+language backend (e.g. Python AST)
+|
+v
+Iterable[Range]  # fold ranges (1-based, inclusive)
 
 ````
 
-Each stage is pure and testable.
+Curate itself does **not** apply folds.
+It only computes *what* should be folded.
 
 ---
 
-## Public API
+## Core concepts
 
-The public API is intentionally small and explicit.
+### 1. Nodes
 
-### Entry points
+All backends produce a tree of `Node` objects.
+
+A `Node` represents a **structural span** in a file:
+
+| Kind      | Meaning                          |
+|-----------|----------------------------------|
+| `module`  | Entire file                      |
+| `class`   | Class definition                 |
+| `function`| Function / method definition     |
+| `doc`     | Docstring                        |
+
+Each node has:
+
+- `kind`
+- `start` (1-based line number)
+- `end` (1-based line number, inclusive)
+- `parent`
+- `children`
+
+Nodes are **pure structure**.
+They do not encode folding rules themselves.
+
+---
+
+### 2. Folding model (v1)
+
+Curate v1 follows a strict **header / body** folding model.
+
+#### General rule
+
+- A node may have a *foldable body*
+- The fold range returned is **only the body**
+- Headers always remain visible
+
+---
+
+### 3. Docstring semantics (important)
+
+Docstrings are **first-class nodes** in v1.
+
+They are treated uniformly with code nodes, but with a fixed header rule.
+
+#### Docstring rules
+
+Let a doc node span `N` lines:
+
+- If `N <= 2`  
+  → no foldable body
+- If `N > 2`  
+  → header = first **2 lines**  
+  → body = remaining lines
+
+Example:
 
 ```python
-from curate import analyze_text, analyze_file
+"""
+Summary line.
+More details.
+
+Attributes:
+    x: ...
+"""
 ````
 
-* `analyze_text(source_text: str) -> Scope`
-* `analyze_file(path: str) -> Scope`
+Header (always visible):
 
-These produce a **semantic model**, not folds.
+```
+"""
+Summary line.
+```
+
+Folded body:
+
+```
+More details.
+
+Attributes:
+    x: ...
+"""
+```
+
+**Notes:**
+
+* Blank lines are irrelevant
+* No attempt is made to parse docstring structure
+* This follows PEP 257’s “summary first” convention
+* The goal is to show a short summary while folding details
 
 ---
 
-### Engine (editor-facing)
+### 4. Cursor semantics
+
+The cursor is interpreted structurally.
+
+Important rule:
+
+> **Docstring nodes are never selected as the current scope.**
+
+If the cursor is inside a docstring:
+
+* The enclosing function / class / module is selected instead
+
+This ensures:
+
+* `level` behaves predictably
+* Folding never “gets stuck” inside documentation
+
+---
+
+### 5. `level`
+
+`level` selects how many ancestors to walk *up* from the current node.
+
+* `level = 0` → current enclosing node
+* `level = 1` → parent
+* `level = 2` → grandparent
+* …etc
+
+The walk stops at the root (`module`).
+
+---
+
+### 6. `fold_children`
+
+`fold_children` controls *how* folding is applied to the selected target node.
+
+#### `fold_children = False` (scope fold)
+
+Fold the **entire body** of the target node.
+
+* Classes → class body
+* Functions → function body
+* Module → everything except header
+* If the node has a docstring, the fold is the docstring body
+
+This corresponds to an editor action like **“fold this block”**.
+
+---
+
+#### `fold_children = True` (children fold)
+
+Fold the **bodies of all immediate children** of the target node.
+
+Children may include:
+
+* Docstrings
+* Methods
+* Nested functions
+* Classes
+
+Each child is folded independently according to its own rules.
+
+This corresponds to **“fold everything inside this block”**.
+
+---
+
+## Python backend (`backends/python_ast.py`)
+
+The Python backend uses the standard library `ast` module.
+
+### Responsibilities
+
+1. Parse source code into an AST
+2. Convert AST nodes into Curate `Node`s
+3. Detect docstrings explicitly
+4. Build a structural node tree
+5. Resolve cursor → node → ancestor
+6. Compute fold ranges according to v1 rules
+
+### Design notes
+
+* `ast.end_lineno` is required (Python ≥ 3.8)
+* Docstrings are detected via:
+
+  * `Expr(Constant(str))` as first body element
+* Doc nodes are:
+
+  * included in the tree
+  * excluded from cursor targeting
+
+---
+
+## Engine entry point
 
 ```python
-from curate import fold_for_cursor, Action
+from curate import Config, fold
 ```
 
 ```python
-folds = fold_for_cursor(
-    source_text,
-    cursor_line=42,
-    action=Action.TOGGLE_MINIMUM,
+cfg = Config(
+    file_type="python",
+    content=source_text,
+    cursor=25,        # 1-based line number
+    level=1,
+    fold_children=True,
 )
+
+ranges = fold(cfg)
 ```
 
 Returns:
 
 ```python
-((start_line, end_line), ...)
+Iterable[tuple[int, int]]
 ```
 
-Properties:
-
-* 1-based line numbers
-* inclusive ranges
-* normalized and non-overlapping
-* no side effects
-
-This is the primary API used by Neovim.
+Each tuple is a **1-based, inclusive line range** suitable for editor folding APIs.
 
 ---
 
-### Actions
+## v1 scope and guarantees
 
-```python
-class Action(Enum):
-    TOGGLE_LOCAL
-    TOGGLE_CODE
-    TOGGLE_DOCS
-    TOGGLE_MINIMUM
-```
+Curate v1 intentionally keeps semantics minimal and explicit:
 
-Actions represent **user intent**, not structure.
+* No language-specific policy branching
+* No heuristics
+* No “smart” doc parsing
+* No editor assumptions
 
-| Action           | Meaning                                      |
-| ---------------- | -------------------------------------------- |
-| `TOGGLE_LOCAL`   | Fold the body of the entity under the cursor |
-| `TOGGLE_CODE`    | Hide code, show docs in current scope        |
-| `TOGGLE_DOCS`    | Hide docs, show code in current scope        |
-| `TOGGLE_MINIMUM` | Show only entity heads                       |
+What you see in tests **is the contract**.
 
----
+Future versions may:
 
-## Semantic Model
+* Add configurable policies
+* Differentiate code vs docs
+* Introduce Tree-sitter backends
+* Support incremental parsing
 
-### Line
-
-```python
-Line(
-    number: int,
-    text: str,
-    kinds: FrozenSet[str],
-)
-```
-
-A `Line` represents a single physical line of text.
-
-Kinds may include:
-
-* `"code"`
-* `"doc"`
-* `"comment"`
-
-Lines may carry **multiple semantic tags**.
+But v1 is intentionally rigid and predictable.
 
 ---
 
-### Entity
+## Summary
 
-```python
-Entity(
-    is_code: bool,
-    kind: str | None,
-    name: str | None,
-    head: Tuple[Line, ...],
-    body: Tuple[Line, ...],
-)
-```
+`src/curate/` provides:
 
-Entities represent **semantic ownership**.
+* A small, test-locked folding engine
+* Deterministic structural semantics
+* Language backends with clear responsibility boundaries
+* A clean separation between editor UX and folding logic
 
-Examples:
-
-* class
-* function
-* async function
-* docstring
-
-Key invariant:
-
-> **Docstrings are split exactly once — in the analyzer.**
-> Downstream layers must treat `head` and `body` as authoritative.
+If tests pass, behavior is guaranteed.
 
 ---
 
-### Scope
-
-```python
-Scope(
-    lines: Tuple[Line, ...],
-    entities: Tuple[Entity, ...],
-    children: Tuple[Scope, ...],
-)
-```
-
-Scopes represent **lexical containment**.
-
-* scopes are nested
-* entities live inside scopes
-* no parent pointers are stored
-* relationships are derived via queries
-
----
-
-## Analyzer (`analyzer.py`)
-
-The analyzer builds the semantic model.
-
-Responsibilities:
-
-* AST traversal
-* docstring extraction
-* head/body splitting
-* entity ownership
-* line tagging
-* scope construction
-
-Important rules:
-
-* Docstring lines are **never part of code bodies**
-* Every line has exactly one semantic owner
-* Doc HEAD = summary paragraph
-* Doc BODY = remaining content
-
----
-
-## Query Layer (`query.py`)
-
-Queries derive structure from the model.
-
-Provided queries:
-
-* `entities_at_line`
-* `best_entity_at_line`
-* `scope_at_line`
-* `parent_entity`
-* `direct_children`
-* `descendants`
-
-All queries are:
-
-* stateless
-* deterministic
-* derived (no stored parent pointers)
-
----
-
-## Views (`views.py`)
-
-Views operate **only on lines**, not entities.
-
-```python
-ViewMode:
-    FULL
-    MINIMUM
-    CODE_ONLY
-    DOCS_ONLY
-```
-
-Views answer the question:
-
-> “Which lines should be visible?”
-
-They do **not** compute folds directly.
-
----
-
-## Fold Plans (`foldplan.py`)
-
-Fold plans convert views into fold ranges.
-
-Properties:
-
-* inclusive line ranges
-* normalized
-* non-overlapping
-* stable ordering
-
-This separation allows:
-
-* testing folds without an editor
-* reuse across integrations
-* strict correctness guarantees
-
----
-
-## Engine (`engine.py`)
-
-The engine ties everything together.
-
-```python
-fold_for_cursor(source_text, cursor_line, action)
-```
-
-Rules:
-
-* no state
-* no caching
-* analyze on every call
-* correctness over speed (v0.1)
-
-This function is the **only semantic entrypoint** editors should call.
-
----
-
-## CLI (`cli.py`)
-
-The CLI is a thin wrapper around the engine:
-
-```bash
-python -m curate file.py --line 42 --action minimum
-```
-
-Output:
-
-```json
-{
-  "action": "minimum",
-  "cursor_line": 42,
-  "entity": { "kind": "function", "name": "foo" },
-  "folds": [{ "start": 10, "end": 38 }]
-}
-```
-
-The CLI exists primarily for:
-
-* editor IPC (Lua)
-* debugging
-* integration testing
-
----
-
-## Testing Philosophy
-
-The Python backend is heavily tested.
-
-Goals:
-
-* semantic correctness
-* stable contracts
-* deterministic folding
-* editor-safe behavior
-
-Tests assert:
-
-* inclusive fold ranges
-* non-overlapping folds
-* correct doc/code separation
-* strict ordering
-* safe no-op behavior
-
-See `TESTING.md` for details.
-
----
-
-## Stability Guarantees
-
-### Stable
-
-* Public API in `curate/__init__.py`
-* `fold_for_cursor`
-* `Action`
-* CLI JSON contract
-
-### Internal (may change)
-
-* analyzer internals
-* block extraction
-* rendering helpers
-* debug utilities
-
----
-
-## Philosophy
-
-Curate follows a strict principle:
-
-> **Correct semantics first. Editor UX second.**
-
-By making the model explicit and deterministic,
-all editor features become simpler, safer, and composable.
+*Curate v1: fold structure, not text.*
