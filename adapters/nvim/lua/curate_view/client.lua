@@ -1,7 +1,12 @@
 -- adapters/nvim/lua/curate_view/client.lua
 --
--- Neovim ↔ Curate (Python) bridge.
--- This file is the ONLY layer that talks to Python.
+-- Neovim ↔ Curate bridge.
+-- This is the ONLY layer that talks to Python.
+--
+-- Contract:
+-- - Input is always source text (we write a temp file and pass its path)
+-- - Output is JSON: { "folds": [[start, end], ...] }
+-- - Lua expresses intent (cursor/level/mode/language). Python decides meaning.
 
 local M = {}
 
@@ -10,12 +15,21 @@ local DEFAULTS = {
   -- Prefer "python3 -m curate" since it works without installing the script.
   cmd = { "python3", "-m", "curate" },
 
-  -- If you prefer the console_script entrypoint, set:
-  -- cmd = { "curate" },
-
   -- Optional: file extension per filetype when writing temp files.
   ext_by_ft = {
     python = ".py",
+    lua = ".lua",
+    markdown = ".md",
+    md = ".md",
+  },
+
+  -- Map Neovim 'filetype' -> Curate 'language'
+  -- Unknown languages fall back to Curate's safe backend.
+  language_by_ft = {
+    python = "python",
+    lua = "lua",
+    markdown = "markdown",
+    md = "markdown",
   },
 
   -- Notifications
@@ -51,14 +65,13 @@ end
 -- Helpers: fold application
 -- ------------------------------------------------------------
 
---- @param folds table[]|nil
+--- @param folds any[]|nil JSON array: [[start,end], ...]
 local function apply_folds(folds)
-  for _, f in ipairs(folds or {}) do
-    local a = tonumber(f.start)
-    local b = tonumber(f["end"])
+  for _, r in ipairs(folds or {}) do
+    local a = tonumber(r[1])
+    local b = tonumber(r[2])
 
-    -- Ignore invalid or zero/negative-length folds.
-    -- Curate contract: start/end are 1-based and inclusive, and we only fold if start < end.
+    -- Curate contract: 1-based inclusive ranges, and only fold if a < b
     if a and b and a < b then
       vim.cmd(string.format("%d,%dfold", a, b))
     end
@@ -66,7 +79,9 @@ local function apply_folds(folds)
 end
 
 local function notify_err(msg)
-  if not CONFIG.notify then return end
+  if not CONFIG.notify then
+    return
+  end
   vim.notify(msg, vim.log.levels.ERROR)
 end
 
@@ -74,12 +89,13 @@ end
 -- Core runner
 -- ------------------------------------------------------------
 
---- Run Curate with a semantic action.
+--- Run Curate.
 --- Toggle UX:
 --- - If cursor is already inside a fold → clear folds (zE)
 --- - Else → compute folds and apply them
---- @param action string One of: "local", "minimum", "code", "docs" (or whatever your CLI supports)
-local function run_curate(action)
+--- @param mode '"self"'|'"children"'
+--- @param level number
+local function run_curate(mode, level)
   local buf = vim.api.nvim_get_current_buf()
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
 
@@ -91,15 +107,23 @@ local function run_curate(action)
 
   local tmp = write_buffer_to_tempfile(buf)
 
+  local ft = vim.bo[buf].filetype
+  local language = (CONFIG.language_by_ft and CONFIG.language_by_ft[ft]) or "unknown"
+
   local cmd = vim.deepcopy(CONFIG.cmd)
-  -- Append args: <path> --line N --action <action>
+  -- Args: <path> --line N --level L --mode <mode> --language <language> --output json
   table.insert(cmd, tmp)
   table.insert(cmd, "--line")
   table.insert(cmd, tostring(cursor_line))
-  table.insert(cmd, "--action")
-  table.insert(cmd, action)
+  table.insert(cmd, "--level")
+  table.insert(cmd, tostring(level or 0))
+  table.insert(cmd, "--mode")
+  table.insert(cmd, mode)
+  table.insert(cmd, "--language")
+  table.insert(cmd, language)
+  table.insert(cmd, "--output")
+  table.insert(cmd, "json")
 
-  -- Run asynchronously
   vim.system(cmd, { text = true }, function(res)
     -- Always clean up temp file (best-effort)
     pcall(vim.loop.fs_unlink, tmp)
@@ -112,7 +136,7 @@ local function run_curate(action)
     end
 
     local ok, payload = pcall(vim.json.decode, res.stdout or "")
-    if not ok or type(payload) ~= "table" then
+    if not ok or type(payload) ~= "table" or type(payload.folds) ~= "table" then
       vim.schedule(function()
         notify_err("Curate returned invalid JSON")
       end)
@@ -128,23 +152,22 @@ local function run_curate(action)
 end
 
 -- ------------------------------------------------------------
--- Public API
+-- Public API (intent only)
 -- ------------------------------------------------------------
 
+--- children/local on current scope
 function M.fold_local()
-  run_curate("local")
+  run_curate("children", 0)
 end
 
-function M.fold_minimum()
-  run_curate("minimum")
+--- children/local one level up
+function M.fold_parent()
+  run_curate("children", 1)
 end
 
-function M.fold_code()
-  run_curate("code")
-end
-
-function M.fold_docs()
-  run_curate("docs")
+--- self/maximal on current scope
+function M.fold_self()
+  run_curate("self", 0)
 end
 
 return M

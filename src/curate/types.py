@@ -1,15 +1,17 @@
 """
-Shared type definitions.
+Core type aliases.
 
-Place in pipeline:
-- Used across engine, backends, and adapters
-- Defines stable, language-agnostic value types
-
-This module exists to avoid type duplication and
-to make cross-layer contracts explicit.
+Why this exists
+---------------
+This module centralizes shared semantic types and keeps
+stringly-typed logic out of the rest of the system.
 """
 
-from typing import Tuple
+from typing import Literal, Tuple
 
-# Inclusive, 1-based line range
 Range = Tuple[int, int]
+#new name
+LineRange = Range
+
+Role = Literal["code", "doc"]
+FoldMode = Literal["self", "children"]

@@ -1,10 +1,9 @@
 # tests/test_engine_properties.py
 
 from pathlib import Path
-
 import pytest
 
-from curate import Config, fold
+from curate import fold
 
 
 @pytest.fixture
@@ -15,32 +14,27 @@ def source_text() -> str:
 
 def test_engine_never_returns_invalid_ranges(source_text):
     """
-    Core invariant for Curate v1:
+    Core invariant:
 
     - fold() must never crash
     - all returned ranges must be valid
     - ranges must stay within file bounds
-    """
 
+    This test intentionally brute-forces many combinations.
+    """
     total_lines = len(source_text.splitlines())
 
     for cursor in range(1, total_lines + 1):
-        for level in range(0, 4):  # small, safe bound
-            for fold_children in (True, False):
-                cfg = Config(
-                    file_type="python",
-                    content=source_text,
+        for level in range(0, 4):
+            for mode in ("self", "children"):
+                ranges = fold(
+                    source=source_text,
                     cursor=cursor,
                     level=level,
-                    fold_children=fold_children,
+                    mode=mode,
                 )
-
-                ranges = fold(cfg)
 
                 for start, end in ranges:
                     assert isinstance(start, int)
                     assert isinstance(end, int)
-
-                    assert start <= end
-                    assert start >= 1
-                    assert end <= total_lines
+                    assert 1 <= start < end <= total_lines

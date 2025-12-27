@@ -1,58 +1,27 @@
 """
-Curate — Structural Code Folding Engine (v1)
+Curate — Structural Folding Engine.
 
-Curate operates purely on text and line numbers to compute foldable
-ranges in structured source code.
-
-It does not mutate source code.
-It does not depend on any editor.
-
-===============================================================================
-Data Flow
-===============================================================================
-
-Adapter (CLI / editor)                          → cli.py
-    ↓
-Configuration object                            → config.py
-    ↓
-engine.fold                                    → engine.py
-    ↓
-backend_factory.get_backend                    → backend_factory.py
-    ↓
-backend.fold                                   → backends/*.py
-    ↓
-Node tree construction (backend-specific)      → node.py
-    ↓
-Range selection (backend-specific)
-    ↓
-engine normalization                           → engine.py
-    ↓
-Adapter applies folds                          → editor / CLI
-
-===============================================================================
 Public API
-===============================================================================
+----------
+This package intentionally exposes a very small surface:
 
-- Config : input object describing a folding request
-- fold   : compute fold ranges for a given Config
+- fold(...)        : Compute fold ranges from source text and user intent
 
-===============================================================================
-Core Rule (v1)
-===============================================================================
+Everything else is internal and may change.
 
-Every backend must implement level == 0.
+Philosophy
+----------
+Curate is built around a strict separation of concerns:
 
-Level 0 is defined as:
-    Fold the smallest structural scope containing the cursor.
+- Structure (facts):     what exists in the source text
+- Language backends:     how structure is extracted for a given language
+- Rules (policy):        how different structures should behave
+- Evaluation (logic):    how intent is applied to facts using rules
 
-In v1:
-- All structural nodes (code and docstrings) are treated uniformly.
-- Semantic distinction between code and documentation is deferred.
-
-===============================================================================
+This file marks the boundary between Curate as a library
+and Curate as an implementation.
 """
 
-from .config import Config
 from .engine import fold
 
-__all__ = ["Config", "fold"]
+__all__ = ["fold"]

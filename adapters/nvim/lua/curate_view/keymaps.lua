@@ -11,26 +11,10 @@ local client = require("curate_view.client")
 -- ---------------------------------------------------------------------
 -- Default keybindings
 -- ---------------------------------------------------------------------
---
--- Semantics:
---
---   f   → fold local scope
---   ff  → same intent, but one level up
---   fff → two levels up
---
--- Lua does NOT interpret levels.
--- It only counts invocations and forwards them to Python.
---
--- Python:
---   - decides how levels map to AST
---   - clamps to root if needed
---   - may ignore levels for languages that don't support it
---
 local DEFAULT_KEYS = {
-  local_fold = "<leader>f",
-  minimum    = "<leader>F",
-  code       = "<leader>fc",
-  docs       = "<leader>fd",
+  local_fold = "<leader>f",   -- fold children at current scope
+  parent     = "<leader>ff",  -- fold children one level up
+  self_fold  = "<leader>F",   -- fold self/maximal at current scope
 }
 
 -- ---------------------------------------------------------------------
@@ -43,27 +27,15 @@ function M.setup(keys)
 
   map("n", keys.local_fold, function()
     client.fold_local()
-  end, {
-    desc = "Curate: fold local semantic scope",
-  })
+  end, { desc = "Curate: fold children (local)" })
 
-  map("n", keys.minimum, function()
-    client.fold_minimum()
-  end, {
-    desc = "Curate: minimum (heads-only) view",
-  })
+  map("n", keys.parent, function()
+    client.fold_parent()
+  end, { desc = "Curate: fold children (parent)" })
 
-  map("n", keys.code, function()
-    client.fold_code()
-  end, {
-    desc = "Curate: fold code (keep docs visible)",
-  })
-
-  map("n", keys.docs, function()
-    client.fold_docs()
-  end, {
-    desc = "Curate: fold docs (keep code visible)",
-  })
+  map("n", keys.self_fold, function()
+    client.fold_self()
+  end, { desc = "Curate: fold self (maximal)" })
 end
 
 return M
