@@ -44,7 +44,7 @@ def _emit_text(ranges: Iterable[Range]) -> None:
 
 def _emit_json(ranges: Iterable[Range]) -> None:
     # JSON array of [start, end]
-    print(json.dumps(list(ranges)))
+    print(json.dumps({"folds": list(ranges)}))
 
 
 def main(argv: list[str] | None = None) -> int:

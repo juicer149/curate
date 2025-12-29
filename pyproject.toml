@@ -12,7 +12,7 @@ dependencies = []
 package-dir = { "" = "src" }
 
 [project.scripts]
-curate = "curate.cli:main"
+curate = "curate.__main__:main"
 
 # ============================================================
 # Pytest + coverage

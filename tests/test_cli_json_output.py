@@ -1,14 +1,14 @@
 import json
 import subprocess
 import sys
-from pathlib import Path
 
 
 def test_cli_json_output():
     """
     CLI contract:
     - --output json must emit valid JSON
-    - JSON must be a list of [start, end] ranges
+    - JSON must be an object with key "folds"
+    - "folds" must be a list of [start, end] integer ranges
     """
 
     source = """
@@ -19,7 +19,6 @@ def f():
     return x + y
 """
 
-    # Run: python -m curate --line 1 --output json
     proc = subprocess.run(
         [
             sys.executable,
@@ -38,11 +37,15 @@ def f():
     assert proc.returncode == 0, proc.stderr
 
     # Must be valid JSON
-    data = json.loads(proc.stdout)
+    payload = json.loads(proc.stdout)
 
-    assert isinstance(data, list)
+    assert isinstance(payload, dict)
+    assert "folds" in payload
 
-    for item in data:
+    folds = payload["folds"]
+    assert isinstance(folds, list)
+
+    for item in folds:
         assert isinstance(item, list)
         assert len(item) == 2
 

@@ -4,74 +4,101 @@
 -- This is the ONLY layer that talks to Python.
 --
 -- Contract:
--- - Input is always source text (we write a temp file and pass its path)
--- - Output is JSON: { "folds": [[start, end], ...] }
--- - Lua expresses intent (cursor/level/mode/language). Python decides meaning.
+-- - Input is always source text (written to a temp file)
+-- - Output is JSON: { folds = [[start, end], ...] }
+-- - Lua expresses intent (cursor / level / mode / language)
+-- - Python decides meaning
 
 local M = {}
 
+-- =====================================================================
+-- Defaults (DATA ONLY – no vim calls here!)
+-- =====================================================================
+
 local DEFAULTS = {
-  -- Command used to invoke Curate.
-  -- Prefer "python3 -m curate" since it works without installing the script.
-  cmd = { "python3", "-m", "curate" },
+  -- Command used to invoke Curate
+  cmd = { "curate" },
 
-  -- Optional: file extension per filetype when writing temp files.
+  -- File extension per filetype when writing temp files
   ext_by_ft = {
-    python = ".py",
-    lua = ".lua",
+    python   = ".py",
+    lua      = ".lua",
     markdown = ".md",
-    md = ".md",
+    md       = ".md",
   },
 
-  -- Map Neovim 'filetype' -> Curate 'language'
-  -- Unknown languages fall back to Curate's safe backend.
+  -- Map Neovim 'filetype' → Curate 'language'
   language_by_ft = {
-    python = "python",
-    lua = "lua",
+    python   = "python",
+    lua      = "lua",
     markdown = "markdown",
-    md = "markdown",
+    md       = "markdown",
   },
 
-  -- Notifications
+  -- Notify on errors
   notify = true,
 }
 
 local CONFIG = vim.deepcopy(DEFAULTS)
 
---- Merge user config.
---- @param opts table|nil
+-- =====================================================================
+-- Setup
+-- =====================================================================
+
 function M.setup(opts)
-  CONFIG = vim.tbl_deep_extend("force", vim.deepcopy(DEFAULTS), opts or {})
+  CONFIG = vim.tbl_deep_extend(
+    "force",
+    vim.deepcopy(DEFAULTS),
+    opts or {}
+  )
 end
 
--- ------------------------------------------------------------
+-- =====================================================================
+-- Fold safety / policy
+-- =====================================================================
+
+--- Lock buffer into deterministic manual fold behavior.
+local function ensure_manual_folds()
+  vim.opt_local.foldmethod = "manual"
+  vim.opt_local.foldenable = true
+  vim.opt_local.foldlevel = 99
+
+  -- CRITICAL: prevent Neovim from auto-opening folds
+  vim.opt_local.foldopen = ""
+end
+
+--- @return boolean
+local function buffer_has_folds()
+  return vim.fn.foldlevel(1) > 0 or vim.fn.foldclosed(1) ~= -1
+end
+
+-- =====================================================================
 -- Helpers: buffer → tempfile
--- ------------------------------------------------------------
+-- =====================================================================
 
---- @param buf number
---- @return string tmp_path
 local function write_buffer_to_tempfile(buf)
-  local ft = vim.bo[buf].filetype
+  local ft  = vim.bo[buf].filetype
   local ext = (CONFIG.ext_by_ft and CONFIG.ext_by_ft[ft]) or ".txt"
+
   local tmp = vim.fn.tempname() .. ext
-
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  vim.fn.writefile(lines, tmp)
 
+  vim.fn.writefile(lines, tmp)
   return tmp
 end
 
--- ------------------------------------------------------------
--- Helpers: fold application
--- ------------------------------------------------------------
+-- =====================================================================
+-- Helpers: apply folds
+-- =====================================================================
 
---- @param folds any[]|nil JSON array: [[start,end], ...]
 local function apply_folds(folds)
+  ensure_manual_folds()
+
   for _, r in ipairs(folds or {}) do
     local a = tonumber(r[1])
     local b = tonumber(r[2])
 
-    -- Curate contract: 1-based inclusive ranges, and only fold if a < b
+    -- Curate contract: 1-based inclusive, fold only if a < b
     if a and b and a < b then
       vim.cmd(string.format("%d,%dfold", a, b))
     end
@@ -79,39 +106,41 @@ local function apply_folds(folds)
 end
 
 local function notify_err(msg)
-  if not CONFIG.notify then
-    return
+  if CONFIG.notify then
+    vim.notify(msg, vim.log.levels.ERROR)
   end
-  vim.notify(msg, vim.log.levels.ERROR)
 end
 
--- ------------------------------------------------------------
+-- =====================================================================
 -- Core runner
--- ------------------------------------------------------------
+-- =====================================================================
 
---- Run Curate.
---- Toggle UX:
---- - If cursor is already inside a fold → clear folds (zE)
---- - Else → compute folds and apply them
---- @param mode '"self"'|'"children"'
---- @param level number
 local function run_curate(mode, level)
   local buf = vim.api.nvim_get_current_buf()
   local cursor_line = vim.api.nvim_win_get_cursor(0)[1]
 
-  -- If we're already inside any fold, clear folds instead (simple toggle).
-  if vim.fn.foldlevel(cursor_line) > 0 then
+  ensure_manual_folds()
+
+  -- -------------------------------------------------------------------
+  -- TOGGLE BEHAVIOR (EXPLICIT, INTENTIONAL)
+  -- -------------------------------------------------------------------
+  if buffer_has_folds() then
     vim.cmd("normal! zE")
     return
   end
 
+  -- -------------------------------------------------------------------
+  -- Prepare Curate call
+  -- -------------------------------------------------------------------
   local tmp = write_buffer_to_tempfile(buf)
 
   local ft = vim.bo[buf].filetype
-  local language = (CONFIG.language_by_ft and CONFIG.language_by_ft[ft]) or "unknown"
+  local language =
+    (CONFIG.language_by_ft and CONFIG.language_by_ft[ft])
+    or "unknown"
 
   local cmd = vim.deepcopy(CONFIG.cmd)
-  -- Args: <path> --line N --level L --mode <mode> --language <language> --output json
+
   table.insert(cmd, tmp)
   table.insert(cmd, "--line")
   table.insert(cmd, tostring(cursor_line))
@@ -124,13 +153,18 @@ local function run_curate(mode, level)
   table.insert(cmd, "--output")
   table.insert(cmd, "json")
 
+  -- -------------------------------------------------------------------
+  -- Run
+  -- -------------------------------------------------------------------
   vim.system(cmd, { text = true }, function(res)
-    -- Always clean up temp file (best-effort)
     pcall(vim.loop.fs_unlink, tmp)
 
     if res.code ~= 0 then
       vim.schedule(function()
-        notify_err("Curate error:\n" .. (res.stderr or res.stdout or ""))
+        notify_err(
+          "Curate error:\n" ..
+          (res.stderr or res.stdout or "")
+        )
       end)
       return
     end
@@ -144,28 +178,23 @@ local function run_curate(mode, level)
     end
 
     vim.schedule(function()
-      -- Clear existing folds before applying new ones
-      vim.cmd("normal! zE")
       apply_folds(payload.folds)
     end)
   end)
 end
 
--- ------------------------------------------------------------
+-- =====================================================================
 -- Public API (intent only)
--- ------------------------------------------------------------
+-- =====================================================================
 
---- children/local on current scope
 function M.fold_local()
   run_curate("children", 0)
 end
 
---- children/local one level up
 function M.fold_parent()
   run_curate("children", 1)
 end
 
---- self/maximal on current scope
 function M.fold_self()
   run_curate("self", 0)
 end
