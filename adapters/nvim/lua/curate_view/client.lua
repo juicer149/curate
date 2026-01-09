@@ -1,25 +1,29 @@
 -- adapters/nvim/lua/curate_view/client.lua
 --
 -- Neovim ↔ Curate bridge.
--- This is the ONLY layer that talks to Python.
 --
--- Contract:
--- - Input is always source text (written to a temp file)
--- - Output is JSON: { folds = [[start, end], ...] }
--- - Lua expresses intent (cursor / level / mode / language)
--- - Python decides meaning
+-- Design principles:
+-- - Lua owns UX + state (level progression)
+-- - Python owns structure + semantics
+-- - No implicit toggles
+-- - No editor-based fold detection
+-- - Deterministic, mechanical behavior
 
 local M = {}
+
+-- =====================================================================
+-- Constants
+-- =====================================================================
+
+local MAX_LEVEL = 999
 
 -- =====================================================================
 -- Defaults (DATA ONLY – no vim calls here!)
 -- =====================================================================
 
 local DEFAULTS = {
-  -- Command used to invoke Curate
   cmd = { "curate" },
 
-  -- File extension per filetype when writing temp files
   ext_by_ft = {
     python   = ".py",
     lua      = ".lua",
@@ -27,7 +31,6 @@ local DEFAULTS = {
     md       = ".md",
   },
 
-  -- Map Neovim 'filetype' → Curate 'language'
   language_by_ft = {
     python   = "python",
     lua      = "lua",
@@ -35,7 +38,6 @@ local DEFAULTS = {
     md       = "markdown",
   },
 
-  -- Notify on errors
   notify = true,
 }
 
@@ -54,22 +56,42 @@ function M.setup(opts)
 end
 
 -- =====================================================================
--- Fold safety / policy
+-- Per-buffer state
 -- =====================================================================
 
---- Lock buffer into deterministic manual fold behavior.
+local STATE = {}
+
+local function buf_state(buf)
+  STATE[buf] = STATE[buf] or { level = 0 }
+  return STATE[buf]
+end
+
+-- Cleanup on buffer destruction (buffer numbers are reused!)
+vim.api.nvim_create_autocmd("BufWipeout", {
+  callback = function(args)
+    STATE[args.buf] = nil
+  end,
+})
+
+local function current_state()
+  local buf = vim.api.nvim_get_current_buf()
+  return buf, buf_state(buf)
+end
+
+-- =====================================================================
+-- Fold ownership / policy
+-- =====================================================================
+
 local function ensure_manual_folds()
   vim.opt_local.foldmethod = "manual"
   vim.opt_local.foldenable = true
   vim.opt_local.foldlevel = 99
-
-  -- CRITICAL: prevent Neovim from auto-opening folds
   vim.opt_local.foldopen = ""
 end
 
---- @return boolean
-local function buffer_has_folds()
-  return vim.fn.foldlevel(1) > 0 or vim.fn.foldclosed(1) ~= -1
+-- Clear only Curate-owned manual folds
+local function clear_folds()
+  vim.cmd("normal! zE")
 end
 
 -- =====================================================================
@@ -93,6 +115,7 @@ end
 
 local function apply_folds(folds)
   ensure_manual_folds()
+  clear_folds()
 
   for _, r in ipairs(folds or {}) do
     local a = tonumber(r[1])
@@ -121,17 +144,6 @@ local function run_curate(mode, level)
 
   ensure_manual_folds()
 
-  -- -------------------------------------------------------------------
-  -- TOGGLE BEHAVIOR (EXPLICIT, INTENTIONAL)
-  -- -------------------------------------------------------------------
-  if buffer_has_folds() then
-    vim.cmd("normal! zE")
-    return
-  end
-
-  -- -------------------------------------------------------------------
-  -- Prepare Curate call
-  -- -------------------------------------------------------------------
   local tmp = write_buffer_to_tempfile(buf)
 
   local ft = vim.bo[buf].filetype
@@ -145,7 +157,7 @@ local function run_curate(mode, level)
   table.insert(cmd, "--line")
   table.insert(cmd, tostring(cursor_line))
   table.insert(cmd, "--level")
-  table.insert(cmd, tostring(level or 0))
+  table.insert(cmd, tostring(level))
   table.insert(cmd, "--mode")
   table.insert(cmd, mode)
   table.insert(cmd, "--language")
@@ -153,9 +165,6 @@ local function run_curate(mode, level)
   table.insert(cmd, "--output")
   table.insert(cmd, "json")
 
-  -- -------------------------------------------------------------------
-  -- Run
-  -- -------------------------------------------------------------------
   vim.system(cmd, { text = true }, function(res)
     pcall(vim.loop.fs_unlink, tmp)
 
@@ -184,19 +193,47 @@ local function run_curate(mode, level)
 end
 
 -- =====================================================================
--- Public API (intent only)
+-- Public API — mechanical, explicit intent
 -- =====================================================================
 
-function M.fold_local()
+-- Fold deeper (zoom out)
+function M.fold_next()
+  local _, state = current_state()
+  state.level = state.level + 1
+  run_curate("self", state.level)
+end
+
+-- Fold to maximal scope immediately
+function M.fold_max()
+  local _, state = current_state()
+  state.level = MAX_LEVEL
+  run_curate("self", state.level)
+end
+
+-- Unfold one level (zoom in)
+function M.unfold_next()
+  local _, state = current_state()
+  state.level = math.max(0, state.level - 1)
+
+  if state.level == 0 then
+    clear_folds()
+  else
+    run_curate("self", state.level)
+  end
+end
+
+-- Fully unfold everything
+function M.unfold_all()
+  local _, state = current_state()
+  state.level = 0
+  clear_folds()
+end
+
+-- Fold immediate children; does not participate in level progression
+function M.fold_children()
+  local _, state = current_state()
+  state.level = 0
   run_curate("children", 0)
-end
-
-function M.fold_parent()
-  run_curate("children", 1)
-end
-
-function M.fold_self()
-  run_curate("self", 0)
 end
 
 return M
