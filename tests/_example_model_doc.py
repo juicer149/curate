@@ -9,15 +9,18 @@ This file is intentionally verbose and structured to exercise:
 - method docstrings
 - top-level functions
 
-It is not part of Curate itself.
+It is not part of Curate itself. även denna ska i framtiden kunna folda endast sin docstring, ev med sektioner etc liknande markdown.
 """
 
 from dataclasses import dataclass
 
+# här borde f inte göra något alls, alternativ folda alla tomma rader i filen?
 
 
-@dataclass
-class Example:
+@dataclass # just nu så foldar denna allt i filen, men den borde egentligen ingå i klassen/funktionen som kommer därefters scope.
+class Example: # om man här trycker på leader+f så foldas allt i denna klassen till sina
+    # headers, dvs metodernas implementationer göms. Men om leader+F trycks så foldas
+    # allt i klassen bort, inklusive metodernas headers, kvar är endast klassens namn.
     """
     A example class with structured data.
 
@@ -26,7 +29,14 @@ class Example:
         value (int): The value associated with the example.
     """
 
-    def __init__(self, name: str, value: int):
+    def __init__(self, name: str, value: int): # samma gäller här, vid f så foldas endast 
+        # denna metodens implementation bort, vid ff så ska den då in princip folda alla
+        # dess syskon, men i logik så är det bara som en f på klassen, dvs på parentnoden.
+        # säg att klassen har foldat med f och sedan befinner man sig här och trycker f,
+        # då ska endast denna metodens implementation vecklas ut. I förlängningen så
+        # ska den skilja mellan doc vs code, där doc alltid är synligt vid f om det utförs
+        # via header, dvs funktionsnamn eller klassnamn. eller om man befinner sig i 
+        # koden.
         """
         Initializes the Example class with a name and value.
 
