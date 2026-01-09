@@ -1,34 +1,10 @@
-"""
-Engine orchestration.
-
-C philosophy
-------------
-This module coordinates components but never decides semantics.
-
-It wires together:
-- structure production
-- indexing
-- intent evaluation
-- normalization
-
-Design principle
-----------------
-"The engine is the referee, not the player."
-"""
-
 from __future__ import annotations
 
-from .types import Range, FoldMode
-from .rules import PYTHON_RULES, NO_FOLD_RULES, Rules
-from .index import build_index
+from .types import FoldMode, Range
 from .evaluator import Intent, evaluate
+from .index import build_index
 from .normalize import normalize
 from .producers import get_producer
-
-
-_RULES_BY_LANGUAGE: dict[str, Rules] = {
-    "python": PYTHON_RULES,
-}
 
 
 def fold(
@@ -39,15 +15,19 @@ def fold(
     mode: FoldMode,
     language: str = "python",
 ) -> tuple[Range, ...]:
-    """
-    Compute fold ranges for a given source and intent.
-    """
-    producer = get_producer(language)
-    rules = _RULES_BY_LANGUAGE.get(language, NO_FOLD_RULES)
+    # IMPORTANT:
+    # Use splitlines() to match how tests (and many editors) count lines.
+    # This avoids off-by-one when the source ends with a trailing newline.
+    total_lines = len(source.splitlines()) if source else 1
+    total_lines = max(1, total_lines)
 
-    graph = producer(source)
+    graph = get_producer(language)(source)
     idx = build_index(graph)
     intent = Intent(cursor=cursor, level=level, mode=mode)
 
-    ranges = evaluate(graph, idx, rules, intent)
-    return normalize(ranges)
+    raw = evaluate(graph, idx, intent)
+    return normalize(raw, max_line=total_lines)
+
+# add in doc:
+# Line numbers are defined using Python's splitlines().
+# A trailing newline does not create an extra addressable line.

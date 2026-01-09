@@ -1,33 +1,32 @@
-"""
-Indexing layer.
-
-Why this exists
----------------
-Queries should be fast and mechanical.
-
-This module derives lookup tables from the inert fact database
-without adding semantics.
-"""
-
 from __future__ import annotations
-from collections import defaultdict
+
 from dataclasses import dataclass
+from typing import Optional
 
 from .model import Scope, ScopeGraph
 
 
-@dataclass(frozen=True)
-class GraphIndex:
+@dataclass(frozen=True, slots=True)
+class Index:
     by_id: dict[int, Scope]
-    children: dict[int | None, list[Scope]]
+    children: dict[int, tuple[int, ...]]
 
 
-def build_index(graph: ScopeGraph) -> GraphIndex:
-    by_id: dict[int, Scope] = {}
-    children: dict[int | None, list[Scope]] = defaultdict(list)
+def build_index(graph: ScopeGraph) -> Index:
+    by_id = {s.id: s for s in graph.scopes}
+    kids: dict[int, list[int]] = {}
 
     for s in graph.scopes:
-        by_id[s.id] = s
-        children[s.parent_id].append(s)
+        if s.parent_id is not None:
+            kids.setdefault(s.parent_id, []).append(s.id)
 
-    return GraphIndex(by_id=by_id, children=dict(children))
+    return Index(by_id, {k: tuple(v) for k, v in kids.items()})
+
+
+def deepest_scope_at_line(graph: ScopeGraph, line: int) -> Optional[Scope]:
+    best = None
+    for s in graph.scopes:
+        if s.contains_line(line):
+            if best is None or s.length <= best.length:
+                best = s
+    return best

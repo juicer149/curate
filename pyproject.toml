@@ -41,9 +41,18 @@ omit = [
 show_missing = true
 skip_covered = false
 
+# ============================================================
+# Optional dependencies
+# ============================================================
+
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
     "pytest-benchmark",
+]
+
+treesitter = [
+    "tree-sitter>=0.25",
+    "tree-sitter-python>=0.25",
 ]

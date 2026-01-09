@@ -1,25 +1,3 @@
-# src/curate/__main__.py
-"""
-Command-line adapter for Curate.
-
-Role
-----
-This module is a thin CLI adapter:
-
-- Translates CLI input into engine intent
-- Invokes the folding engine
-- Formats output for the caller
-
-It does NOT:
-- Interpret structure
-- Apply folding semantics
-- Special-case languages or editors
-
-Design principle
-----------------
-"Adapters translate intent and format output. They do not contain logic."
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -28,7 +6,7 @@ import sys
 from typing import Iterable
 
 from .engine import fold
-from .types import FoldMode, Range
+from .types import Range
 
 
 def _read_source(path: str | None) -> str:
@@ -38,71 +16,35 @@ def _read_source(path: str | None) -> str:
 
 
 def _emit_text(ranges: Iterable[Range]) -> None:
-    for start, end in ranges:
-        print(f"{start}:{end}")
+    for a, b in ranges:
+        print(f"{a}:{b}")
 
 
 def _emit_json(ranges: Iterable[Range]) -> None:
-    # JSON array of [start, end]
-    print(json.dumps({"folds": list(ranges)}))
+    print(json.dumps({"folds": [list(r) for r in ranges]}))
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser("curate")
+    p = argparse.ArgumentParser("curate")
+    p.add_argument("file", nargs="?", default="-")
+    p.add_argument("--line", type=int, required=True)
+    p.add_argument("--level", type=int, default=0)
+    p.add_argument("--mode", choices=("self", "children"), default="children")
+    p.add_argument("--language", default="python")
+    p.add_argument("--output", choices=("text", "json"), default="text")
 
-    parser.add_argument(
-        "file",
-        nargs="?",
-        default="-",
-        help="Source file (default: stdin)",
-    )
-    parser.add_argument(
-        "--line",
-        type=int,
-        required=True,
-        help="Cursor line (1-based)",
-    )
-    parser.add_argument(
-        "--level",
-        type=int,
-        default=0,
-        help="Ancestor level (0 = current scope)",
-    )
-    parser.add_argument(
-        "--mode",
-        choices=("self", "children"),
-        default="children",
-        help="Fold mode",
-    )
-    parser.add_argument(
-        "--language",
-        default="python",
-        help="Language backend (default: python)",
-    )
-    parser.add_argument(
-        "--output",
-        choices=("text", "json"),
-        default="text",
-        help="Output format (default: text)",
-    )
-
-    args = parser.parse_args(argv)
-
+    args = p.parse_args(argv)
     source = _read_source(args.file)
 
     ranges = fold(
         source=source,
         cursor=args.line,
         level=args.level,
-        mode=args.mode,      # FoldMode
+        mode=args.mode,
         language=args.language,
     )
 
-    if args.output == "json":
-        _emit_json(ranges)
-    else:
-        _emit_text(ranges)
-
+    (_emit_json if args.output == "json" else _emit_text)(ranges)
     return 0
 
 

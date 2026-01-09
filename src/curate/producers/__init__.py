@@ -1,29 +1,34 @@
+from __future__ import annotations
+
 """
 Producer registry.
 
-Why this exists
----------------
-Language selection is an orchestration concern.
+A producer is a callable:
+    (source: str) -> ScopeGraph
 
-Producers:
-- know how to parse
-- do NOT know about rules
-- do NOT know about editors
+The engine does not know or care how the graph is built.
 """
 
-from .python_ast import build_graph as python_graph
-from .empty import build_graph as empty_graph
+from typing import Callable
+
+from ..model import ScopeGraph
+from .treesitter import build_graph
 
 
-_PRODUCERS = {
-    "python": python_graph,
-}
+Producer = Callable[[str], ScopeGraph]
 
 
-def get_producer(language: str):
+def get_producer(language: str) -> Producer:
     """
-    Return a structure producer for the given language.
+    Return a producer function for the given language.
 
-    Unknown languages fall back to a safe no-op producer.
+    The returned callable takes source text and produces a ScopeGraph.
     """
-    return _PRODUCERS.get(language, empty_graph)
+
+    def producer(source: str) -> ScopeGraph:
+        return build_graph(language, source)
+
+    return producer
+
+
+__all__ = ["Producer", "get_producer"]
