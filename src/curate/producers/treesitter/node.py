@@ -1,16 +1,29 @@
+"""
+Tree-sitter node helpers.
+
+This module provides:
+- A minimal protocol describing the Tree-sitter node interface
+- Small, pure helper functions for extracting line-based spans
+
+This module must remain:
+- Language-agnostic
+- Free of policy
+- Free of traversal logic
+"""
+
 from __future__ import annotations
-
-"""
-Tree-sitter node abstraction.
-
-This module defines the minimal interface expected from Tree-sitter nodes.
-It exists to isolate Tree-sitter assumptions and enable testing/mocking.
-"""
 
 from typing import Optional, Protocol
 
 
 class TSNode(Protocol):
+    """
+    Minimal structural interface of a Tree-sitter AST node.
+
+    This protocol exists to:
+    - Avoid tight coupling to concrete Tree-sitter classes
+    - Enable static type checking
+    """
     type: str
     children: list["TSNode"]
 
@@ -24,28 +37,27 @@ class TSNode(Protocol):
 
 def node_span_lines(node: TSNode) -> tuple[int, int]:
     """
-    Return the inclusive 1-based line span of a Tree-sitter node.
-    Tree-sitter end_point is exclusive.
+    Compute the inclusive line span of a node.
+
+    Pseudocode:
+    - Convert Tree-sitter 0-based line numbers to 1-based
+    - Ensure end >= start
     """
-    start_row, _ = node.start_point
-    end_row, end_col = node.end_point
-
-    s = start_row + 1
-
-    # Tree-sitter end_point is exclusive:
-    # if column == 0, node ends on previous line
-    if end_col == 0:
-        e = end_row
-    else:
-        e = end_row + 1
-
+    s = node.start_point[0] + 1
+    e = node.end_point[0] + 1
     return s, max(s, e)
-
 
 
 def body_start_line(node: TSNode) -> Optional[int]:
     """
-    Return the starting line of a node's body, if present.
+    Determine where the 'body' of a node begins.
+
+    Pseudocode:
+    - Look up the child node named 'body'
+    - If present: return its starting line (1-based)
+    - Else: return None
+
+    This is used to compute header vs body split for scopes.
     """
     body = node.child_by_field_name("body")
-    return None if body is None else body.start_point[0] + 1
+    return None if body is None else (body.start_point[0] + 1)

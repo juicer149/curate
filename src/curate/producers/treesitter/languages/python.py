@@ -1,12 +1,20 @@
+"""
+Tree-sitter structural rules and grammar loader for Python.
+"""
 from __future__ import annotations
 
-"""
-Python language rules.
-"""
+from tree_sitter import Language
+import tree_sitter_python as tspython
 
-from ..policy import NodePolicy
-from ..language_rules import LanguageRules
-from ..wrapper import WrapperRule
+from ..rules import LanguageRules, NodePolicy, WrapperRule
+
+
+def load_language() -> Language:
+    """
+    Load and return the Tree-sitter Python grammar.
+    """
+    return Language(tspython.language())
+
 
 NOOP = NodePolicy(is_scope=False, noop=True)
 
@@ -16,13 +24,13 @@ PYTHON_RULES = LanguageRules(
         "class_definition": NodePolicy(is_scope=True, kind="class"),
         "function_definition": NodePolicy(is_scope=True, kind="function"),
 
-        # Decorators are wrappers
+        # Decorators
         "decorated_definition": NodePolicy(
             is_scope=False,
             include_in_child_start=True,
         ),
 
-        # Control flow / blocks
+        # Control flow
         "if_statement": NodePolicy(is_scope=True, kind="if"),
         "for_statement": NodePolicy(is_scope=True, kind="for"),
         "while_statement": NodePolicy(is_scope=True, kind="while"),

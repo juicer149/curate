@@ -1,61 +1,22 @@
+# src/curate/evaluator.py
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from .index import Index, deepest_scope_at_line
-from .model import ScopeGraph
-from .types import FoldMode, Range
+from .model import Scope
+from .types import Range
 
 
-@dataclass(frozen=True, slots=True)
-class Intent:
-    cursor: int
-    level: int
-    mode: FoldMode
+def ranges_for_scopes(scopes: tuple[Scope, ...]) -> tuple[Range, ...]:
+    """
+    Convert scopes into foldable body ranges.
 
-
-def _ascend(idx: Index, sid: int, levels: int) -> int:
-    cur = sid
-    for _ in range(levels):
-        s = idx.by_id.get(cur)
-        if s is None or s.parent_id is None:
-            break
-        cur = s.parent_id
-    return cur
-
-
-def _body_range(s) -> Range | None:
-    start = s.body_start
-    end = s.end
-
-    if start is None:
-        return None
-
-    if start < end:
-        return (start, end)
-
-    return None
-
-
-def evaluate(graph: ScopeGraph, idx: Index, intent: Intent) -> tuple[Range, ...]:
-    target = deepest_scope_at_line(graph, intent.cursor)
-    if target is None:
-        return ()
-
-    sid = _ascend(idx, target.id, intent.level)
-    scope = idx.by_id.get(sid)
-    if scope is None:
-        return ()
-
-    if intent.mode == "self":
-        r = _body_range(scope)
-        return (r,) if r else ()
-
+    May return invalid / empty ranges.
+    Normalization is handled by the engine layer.
+    """
     out: list[Range] = []
-    for cid in idx.children.get(scope.id, ()):
-        ch = idx.by_id[cid]
-        r = _body_range(ch)
-        if r:
+
+    for scope in scopes:
+        r = scope.body_range()
+        if r is not None:
             out.append(r)
 
     return tuple(out)

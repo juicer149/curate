@@ -3,31 +3,37 @@ from __future__ import annotations
 from .types import Range
 
 
-def normalize(
+def normalize_ranges(
     ranges: tuple[Range, ...],
     *,
-    max_line: int | None = None,
+    total_lines: int,
 ) -> tuple[Range, ...]:
     """
-    Normalize fold ranges into a safe, editor-ready form.
+    Normalize a set of line ranges.
 
     Guarantees:
-    - 1-based inclusive ranges
-    - start < end
+    - all ranges are (int, int)
+    - 1 <= start < end <= total_lines
     - no duplicates
-    - sorted
-    - optionally clamped to file bounds
+    - sorted by (start, end)
+
+    This function is the FINAL safety barrier.
     """
-    seen: set[Range] = set()
+    if total_lines <= 0:
+        total_lines = 1
+
     out: list[Range] = []
+    seen: set[Range] = set()
 
     for a, b in ranges:
-        if max_line is not None:
-            # Clamp to file bounds
-            a = min(max(a, 1), max_line)
-            b = min(max(b, 1), max_line)
+        if not isinstance(a, int) or not isinstance(b, int):
+            continue
 
-        # Structural validity
+        # Clamp to bounds
+        a = max(1, min(a, total_lines))
+        b = max(1, min(b, total_lines))
+
+        # Enforce strict ordering
         if a >= b:
             continue
 
@@ -38,5 +44,5 @@ def normalize(
         seen.add(r)
         out.append(r)
 
-    out.sort()
+    out.sort(key=lambda r: (r[0], r[1]))
     return tuple(out)

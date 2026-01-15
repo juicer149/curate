@@ -1,29 +1,51 @@
+"""
+Registry for Tree-sitter language support.
+
+This module is the single place where:
+- language identifiers
+- grammar loaders
+- structural scope rules
+
+are bound together.
+"""
 from __future__ import annotations
 
-"""
-Tree-sitter language registry.
+from typing import Callable, Optional
+from tree_sitter import Language
 
-Maps language identifiers to:
-- LanguageRules
-- Tree-sitter grammar loaders
-"""
-
-from ...policies.python import PYTHON_RULES
-from ...policies.default_block import DEFAULT_BLOCK_RULES
+from .rules import LanguageRules
+from .languages import python, default
 
 
-LANGUAGE_RULES = {
-    "python": PYTHON_RULES,
-    "default": DEFAULT_BLOCK_RULES,
-}
+class LanguageSpec:
+    """
+    Complete Tree-sitter language specification.
+
+    rules:
+        Structural rules describing how syntax nodes map to scopes.
+
+    loader:
+        Callable that loads and returns a Tree-sitter Language.
+        If None, this language cannot be parsed and will produce
+        an empty scope graph.
+    """
+    def __init__(
+        self,
+        *,
+        rules: LanguageRules,
+        loader: Optional[Callable[[], Language]],
+    ):
+        self.rules = rules
+        self.loader = loader
 
 
-def load_python_language():
-    import tree_sitter_python as tspython
-    from tree_sitter import Language
-    return Language(tspython.language())
-
-
-LANGUAGE_LOADERS = {
-    "python": load_python_language,
+LANGUAGES: dict[str, LanguageSpec] = {
+    "python": LanguageSpec(
+        rules=python.PYTHON_RULES,
+        loader=python.load_language,
+    ),
+    "default": LanguageSpec(
+        rules=default.DEFAULT_RULES,
+        loader=None,
+    ),
 }

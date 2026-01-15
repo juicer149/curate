@@ -46,12 +46,12 @@ install: venv
 
 # Optional: core-only install (no algorithm deps)
 install-core: venv
-	@echo "  make bench         Run Codex benchmark (WARMUP/ITERS/RUNS overridable)"
+	@echo "  make bench         Run benchmark (pass args via ARGS='...')"
 	@echo "  make loc           Count LOC for folders. Usage:"
-	@echo "                     make loc codex dsl tests"
-	@echo "                     or: make loc DIRS=\"codex dsl\""
+	@echo "                     make loc curate tests"
+	@echo "                     or: make loc DIRS=\"curate tests\""
 test:
-	pytest -q --cov=codex --cov=dsl --cov=loader --cov-report=term-missing
+	pytest -q
 
 lint:
 	$(VENV)/bin/ruff check src tests_new

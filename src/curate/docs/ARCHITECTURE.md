@@ -1,231 +1,314 @@
-# ARCHITECTURE.md
+# Curate – Architecture
 
 ## Overview
 
-Curate is a structural analysis engine for source code.
-Its core responsibility is to reduce source text into **nested scopes**, and to apply user intent as deterministic operations over this structure.
+Curate is a **deterministic structural analysis engine** for source code.
 
-Curate deliberately avoids syntax-specific, editor-specific, or language-specific semantics in its core.
-All intelligence is expressed in terms of **scopes, ownership, and containment**.
+Its purpose is to extract *structural facts* ("scopes") from source text and allow higher‑level tools (editors, analyzers, AI systems) to **query and project** those facts in a predictable way.
 
-Folding is the first consumer of this model, not its defining feature.
+Curate is intentionally **not**:
 
----
+* a semantic analyzer
+* a linter
+* an AI system
+* an editor plugin
 
-## Core Abstraction: Scopes
-
-The fundamental abstraction in Curate is the **scope**.
-
-A scope represents a contiguous interval of source lines that are logically owned by a single structural entity (e.g. module, class, function, docstring).
-
-Formally, a scope is defined as:
-
-```
-Scope = (id, parent_id, start_line, end_line, role)
-```
-
-Where:
-
-* `start_line` and `end_line` define a **closed interval** of line numbers
-* `parent_id` establishes ownership
-* `role` classifies the scope (e.g. code, documentation)
-
-A scope contains *no behavior*.
-It is an inert fact.
+It is a **core structural layer** designed to be reused by many consumers.
 
 ---
 
-## Scopes as Sets
+## Core Design Principles
 
-Each scope corresponds to a finite set of line numbers:
+### 1. Separation of Concerns
+
+Curate is built as a strict pipeline with clearly separated responsibilities:
 
 ```
-S = { start, start+1, …, end }
+Source Text
+  ↓
+Producer        (syntax → structure)
+  ↓
+ScopeGraph      (structural facts)
+  ↓
+Index           (accelerated navigation)
+  ↓
+Query           (relations & selection)
+  ↓
+Ranges / Scopes (projection targets)
 ```
 
-All structural reasoning in Curate is based on **set inclusion**, not syntax.
+Each stage:
 
-This allows Curate to abstract away:
+* consumes a well‑defined input
+* produces a well‑defined output
+* is unaware of how the other stages are implemented
 
-* indentation
-* AST shape
-* token-level structure
-
-These mechanisms exist only to *produce* scopes, not to reason about them.
+This separation is enforced at the module level.
 
 ---
 
-## Laminär Structure (Non-Overlapping Invariant)
+### 2. Structural, Not Semantic
 
-All scopes in a file form a **laminar family of sets**.
+Curate only answers questions of the form:
 
-For any two scopes A and B, exactly one of the following holds:
+* *What structural scopes exist?*
+* *How are they nested or related?*
+* *Where are they located in the source?*
 
-* A ⊂ B
-* B ⊂ A
-* A ∩ B = ∅
+It does **not** answer:
 
-Partial overlap is forbidden.
+* what code *means*
+* whether code is *correct*
+* which parts are *important*
 
-This invariant guarantees:
-
-* deterministic parent relationships
-* tree-shaped navigation
-* predictable folding behavior
-
-The `ScopeGraph` is therefore a tree (with an explicit root scope).
+Relevance and meaning are delegated to higher‑level systems.
 
 ---
 
-## Ownership and Containment
+### 3. Determinism
 
-Ownership is defined purely by **set inclusion**.
+Given the same input:
 
-If:
+* Curate always produces the same `ScopeGraph`
+* queries always return the same scopes
+* ranges are stable and reproducible
 
-```
-child ⊂ parent
-```
+This property is critical for:
 
-then the parent scope owns the child scope.
-
-There is no concept of “siblings by syntax” or “blocks by indentation” in the core model.
-Only containment matters.
-
----
-
-## Documentation as Sub-Scopes
-
-Documentation (e.g. docstrings) is modeled as **normal scopes with a distinct role**.
-
-This enables:
-
-* logical LOC = physical LOC − documentation scopes
-* folding policies that treat documentation differently
-* zero special cases in the engine
-
-All distinctions are expressed via rules, not structural hacks.
+* editor tooling
+* AI context construction
+* caching and indexing
 
 ---
 
-## ScopeGraph: Fact Database
+## Core Data Model
 
-The `ScopeGraph` is an immutable container for all scopes in a file.
+### Scope
 
-It represents a **fact database**, not a semantic model.
+A `Scope` represents a **contiguous structural region** of source code.
+
+Each scope has:
+
+* a stable `id`
+* an optional `parent_id`
+* a `kind` label (e.g. `function`, `class`, `if`)
+* a 1‑based inclusive line range `[start, end]`
+* a `header_lines` count
+
+Scopes are **pure data**. They contain no text and no behavior beyond simple range helpers.
+
+---
+
+### ScopeGraph
+
+A `ScopeGraph` is an immutable container of scopes with one invariant:
+
+> Any two scopes are either **nested** or **disjoint**.
+
+There is always a root `module` scope covering the entire file.
+
+The graph itself contains **no indices or relations** beyond parent references.
+
+---
+
+## Producer Layer
+
+### Responsibility
+
+A *producer* is responsible for converting raw input into a `ScopeGraph`.
 
 Responsibilities:
 
-* store scopes
-* preserve laminar invariants
-* provide a stable base for indexing and querying
+* parse source text
+* identify structural constructs
+* emit scopes with correct ranges
+* guarantee a valid `ScopeGraph` for any input
 
-The graph itself performs no interpretation.
+Non‑responsibilities:
 
----
-
-## Indexing and Queries
-
-Indexes (e.g. parent lookup, children lookup) are derived mechanically from the `ScopeGraph`.
-
-Queries such as:
-
-* “children of this scope”
-* “smallest scope containing this line”
-
-are pure operations over facts.
-
-They do not encode folding behavior, navigation intent, or editor semantics.
+* cursor handling
+* navigation
+* querying
+* relevance decisions
 
 ---
 
-## Intent: User Interaction Model
+### Tree‑sitter Producer
 
-User interaction is expressed as **intent**, not commands.
+The current implementation uses **Tree‑sitter** as the parsing backend.
+
+The Tree‑sitter producer:
+
+* loads a grammar for a given language
+* walks the syntax tree
+* applies language‑specific structural rules
+* emits scopes accordingly
+
+Tree‑sitter specific logic is fully isolated under:
 
 ```
-Intent = (cursor_line, level, mode)
+curate/producers/treesitter/
 ```
 
-Where:
+---
 
-* `cursor_line` identifies a position in the source
-* `level` describes upward traversal in the ownership hierarchy
-* `mode` selects the operation (`self`, `children`, etc.)
+### Language Rules
 
-Intent is editor-agnostic and language-agnostic.
+Language behavior is described using **data‑only rule definitions**:
+
+* `NodePolicy` – how a syntax node participates in scope construction
+* `WrapperRule` – how wrapper nodes forward start positions
+* `LanguageRules` – a complete ruleset for a grammar
+
+Rules:
+
+* contain no Tree‑sitter imports
+* perform no I/O
+* are safe to serialize and inspect
 
 ---
 
-## Rules: Policy as Data
+### Language Registry
 
-All folding semantics are expressed as **rules**, not control flow.
+A central registry binds together:
 
-Rules define:
+* language identifier (e.g. `"python"`)
+* grammar loader
+* structural rules
 
-* which scopes are navigable
-* which scopes are foldable
-* how headers relate to bodies
-
-Rules are immutable, explicit, and passed as values.
-
-Changing behavior means changing rules, not engine logic.
+This registry is the **only place** where language names are coupled to Tree‑sitter details.
 
 ---
 
-## Engine: Deterministic Application
+## Index Layer
 
-The engine coordinates:
+### Responsibility
 
-1. structure production
-2. indexing
-3. intent evaluation
-4. rule application
-5. output normalization
+The `Index` is a derived, immutable structure built from a `ScopeGraph`.
 
-It never makes semantic decisions.
+Its purpose is to provide **fast navigation primitives**:
 
-The engine is a referee, not a player.
+* parent / children lookup
+* next / previous scope
+* kind‑based traversal
+* efficient lookup by source line
 
----
-
-## Adapters
-
-Adapters (CLI, Neovim, etc.) are responsible for:
-
-* collecting external state
-* translating it into intent
-* invoking the engine
-* applying results in the host environment
-
-Adapters do not interpret scopes or rules.
-
-Python is the source of truth.
+The index contains no business logic and no semantics.
 
 ---
 
-## Design Principles
+### Performance Guarantees
 
-* Facts are inert; intelligence lives elsewhere
-* Policy is data, not control flow
-* Structure precedes behavior
-* Silence is better than guessing
-* Adapters translate intent; they do not contain logic
+The index enables:
+
+* O(1) parent/child access
+* O(1) next/prev access
+* O(log n + depth) lookup of deepest scope at a line
+
+All performance optimizations are confined to this layer.
+
+---
+
+## Query Layer
+
+### Responsibility
+
+The query layer answers questions about **relationships between scopes**.
+
+Queries are defined by:
+
+* a cursor position
+* an axis (e.g. `parent`, `siblings`, `ancestors`)
+* optional filters (`kinds`, `max_items`)
+
+The query layer:
+
+* never parses source text
+* never inspects syntax nodes
+* operates purely on structural data
+
+---
+
+### Relations
+
+Relations are implemented as small, composable functions:
+
+* `self`
+* `parent`
+* `children`
+* `ancestors`
+* `descendants`
+* `siblings`
+* `next` / `prev`
+* `next_same_kind` / `prev_same_kind`
+* `all_of_kind`
+
+This design is inspired by relational and functional programming models.
+
+---
+
+## Engine Layer
+
+The engine orchestrates the full pipeline:
+
+1. produce a `ScopeGraph`
+2. build an `Index`
+3. resolve a `Query`
+4. project scopes into ranges
+
+The engine is the **only module** that coordinates multiple layers.
+
+---
+
+## Skeletons and Projections
+
+Curate does **not** define skeletons.
+
+Instead, it provides the primitives required to build them:
+
+* precise scope ranges
+* header/body separation
+* structural relations
+
+Skeletons (e.g. headers‑only views, AI context summaries) are **projections built on top of Curate**, not part of the core.
+
+This keeps Curate neutral and reusable.
+
+---
+
+## Intended Consumers
+
+Curate is designed to be used by:
+
+* editor tooling (folding, navigation)
+* static analysis pipelines
+* project indexers
+* AI context builders
+
+All consumers operate **above** the core and interpret its output according to their own needs.
+
+---
+
+## Non‑Goals
+
+Curate explicitly avoids:
+
+* semantic analysis
+* symbol resolution
+* type inference
+* relevance scoring
+* language‑specific heuristics outside producers
+
+These are higher‑level concerns by design.
 
 ---
 
 ## Summary
 
-Curate reduces source code to a laminar family of line-interval scopes.
+Curate is a small, strict, deterministic core that:
 
-All higher-level behavior emerges from applying intent and rules to this structure.
+* extracts structural facts
+* preserves clean abstractions
+* scales to new producers and consumers
 
-This model is:
-
-* language-agnostic
-* editor-agnostic
-* mathematically well-defined
-* resistant to feature creep
-
-Folding is an application.
-The scope model is the system.
+It is designed to be *boring, predictable, and reusable* — a solid foundation rather than a feature‑rich application.
