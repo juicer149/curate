@@ -36,3 +36,4 @@ luac.out
 .DS_Store
 .idea/
 .vscode/
+bench_curate.py

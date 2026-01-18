@@ -1,30 +1,30 @@
 """
-Curate — structural facts engine.
+Curate — Structural Fact Engine.
 
-Public surface:
-- compile_scope_set / compile_scope_sets
-- build_index / scope_at_line
-- relations
-- query_ranges / fold
+Curate extracts deterministic, laminar structural facts from syntax trees.
+
+Public surface (core):
+- Scope, ScopeSet       — structural facts
+- compile_scope_set     — compilation facade
+- relations             — algebraic structural relations over facts
+
+Curate intentionally exposes:
+- no semantic interpretation
+- no policy or filtering
+- no query engine
+- no file / project / workspace awareness
+
+Curate is designed to act as a stable structural IR
+for higher layers that apply meaning and navigation.
 """
 
 from .facts import Scope, ScopeSet
-from .compile import SourceUnit, compile_scope_set, compile_scope_sets
-from .index import Index, build_index, scope_at_line
+from .compile import compile_scope_set
 from . import relations
-from .query import Query, query_ranges, fold
 
 __all__ = [
     "Scope",
     "ScopeSet",
-    "SourceUnit",
     "compile_scope_set",
-    "compile_scope_sets",
-    "Index",
-    "build_index",
-    "scope_at_line",
     "relations",
-    "Query",
-    "query_ranges",
-    "fold",
 ]

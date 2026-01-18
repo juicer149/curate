@@ -1,35 +1,24 @@
-"""treesitter.registry — language specs as data
+"""treesitter.registry — language registry
 
 Binds:
-- language identifiers
+- language key
 - grammar loader
-- structural extraction rules
-
-If loader is None:
-- producer falls back to module-only ScopeSet
+- structural rules (loaded from .lang.json)
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
+from pathlib import Path
+import json
 from typing import Callable, Optional
 
-from .rules import LanguageRules, WrapperRule
+from .rules import LanguageRules
 
 
 @dataclass(frozen=True, slots=True)
 class LanguageSpec:
-    loader: Optional[Callable[[], "Language"]]
+    loader: Optional[Callable]
     rules: LanguageRules
 
-
-def _default_rules() -> LanguageRules:
-    return LanguageRules(scope_node_types=frozenset())
-
-
-# ----------------------------
-# Optional loaders (imports inside function)
-# ----------------------------
 
 def _load_python():
     import tree_sitter_python as tsp
@@ -37,34 +26,19 @@ def _load_python():
     return Language(tsp.language())
 
 
-# ----------------------------
-# Minimal structural rulesets
-# ----------------------------
+def _load_rules(name: str) -> LanguageRules:
+    path = Path(__file__).parent / "languages" / f"{name}.lang.json"
+    with path.open("r", encoding="utf-8") as f:
+        return LanguageRules.from_dict(json.load(f))
 
-PYTHON_RULES = LanguageRules(
-    scope_node_types=frozenset(
-        {
-            # defs
-            "class_definition",
-            "function_definition",
-            # control blocks
-            "if_statement",
-            "for_statement",
-            "while_statement",
-            "try_statement",
-            "with_statement",
-            "match_statement",
-        }
-    ),
-    wrapper_rules=(
-        WrapperRule(
-            wrapper_type="decorated_definition",
-            target_types=("class_definition", "function_definition"),
-        ),
-    ),
-)
 
-LANGUAGES: dict[str, LanguageSpec] = {
-    "default": LanguageSpec(loader=None, rules=_default_rules()),
-    "python": LanguageSpec(loader=_load_python, rules=PYTHON_RULES),
+LANGUAGES = {
+    "default": LanguageSpec(
+        loader=None,
+        rules=_load_rules("default"),
+    ),
+    "python": LanguageSpec(
+        loader=_load_python,
+        rules=_load_rules("python"),
+    ),
 }

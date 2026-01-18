@@ -1,0 +1,8 @@
+{
+  "language": "default",
+  "scopes": {
+    "include": ["module"],
+    "exclude": [],
+    "only_multiline": false
+  }
+}

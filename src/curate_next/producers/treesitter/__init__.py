@@ -1,5 +1,5 @@
 """
-Tree-sitter producer backend.
+curate.producers.treesitter — Tree-sitter backend
 
 Exports:
 - build_scope_set(source, language) -> ScopeSet

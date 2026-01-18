@@ -1,109 +1,75 @@
-"""
-curate.facts — structural facts only (IR)
+"""curate.facts — structural ontology (facts only)
 
-This module defines Curate’s core ontology.
+This module defines Curate’s entire data model.
 
-Key idea:
-    Curate does NOT understand meaning.
-    It only records *what structural intervals exist and where*.
-
-Invariant (critical):
-    Scopes form a *laminar family*:
-    any two scopes are either:
-        - disjoint, or
-        - nested (one fully contains the other)
-
-This module must remain boring:
-- immutable data
-- no IO
-- no caching
-- no querying or relations
+Rules:
+- immutable
+- no I/O
+- no interpretation
+- no queries
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import Iterator, Optional, Tuple, Union
+from typing import Tuple, Iterable, Union, TypeAlias
+
+ScopeId: TypeAlias = Tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Scope:
     """
-    Atomic structural interval.
+    Atomic structural fact.
 
     Fields:
         id:
-            Unique identifier within a ScopeSet.
-        parent_id:
-            Parent scope id, or None if this is a root scope.
+            Hierarchical structural address.
+            Parent is id[:-1].
+
         kind:
-            Upstream structural label (e.g. Tree-sitter node.type).
+            Syntax node type (verbatim from Tree-sitter).
+
         start, end:
             1-based inclusive line span.
+
+    Invariants:
+        - id is non-empty
+        - start <= end
     """
-    id: int
-    parent_id: Optional[int]
+    id: ScopeId
     kind: str
     start: int
     end: int
 
     def contains(self, line: int) -> bool:
-        """True iff `line` is within [start, end] (inclusive)."""
         return self.start <= line <= self.end
+
+    @property
+    def parent_id(self) -> ScopeId | None:
+        return self.id[:-1] if len(self.id) > 1 else None
 
 
 @dataclass(frozen=True, slots=True)
 class ScopeSet:
     """
-    Immutable collection of scopes.
+    Immutable collection of Scope facts.
 
-    Properties:
-        - scopes are laminar (nested or disjoint)
-        - ordering is deterministic
-        - safe to share across threads
-        - equality is structural
+    Guarantees:
+    - deterministic ordering
+    - laminar structure
+    - no semantic meaning
 
-    ScopeSet deliberately does NOT:
-        - answer queries ("what is the parent?")
-        - perform filtering
-        - interpret scope kinds
-        - understand files or projects
+    ScopeSet has NO query logic.
     """
     scopes: Tuple[Scope, ...]
 
-    def __iter__(self) -> Iterator[Scope]:
-        """Iterate over scopes in deterministic order."""
+    def __iter__(self) -> Iterable[Scope]:
         return iter(self.scopes)
 
     def __len__(self) -> int:
-        """Return number of scopes (O(1))."""
         return len(self.scopes)
 
-    def __getitem__(self, index: Union[int, slice]) -> Union[Scope, "ScopeSet"]:
-        """
-        Index or slice into the ScopeSet.
-
-        Semantics:
-            - scopeset[i] returns the Scope at position i
-            - scopeset[a:b] returns a new ScopeSet containing that slice
-
-        Examples:
-            scopeset[0]   -> Scope
-            scopeset[-1]  -> Scope
-            scopeset[1:4] -> ScopeSet
-            scopeset[:]   -> ScopeSet
-        """
-        if isinstance(index, slice):
-            return ScopeSet(self.scopes[index])
-        return self.scopes[index]
-
-    def __eq__(self, other: object) -> bool:
-        """Structural equality: same scopes in the same order."""
-        if not isinstance(other, ScopeSet):
-            return NotImplemented
-        return self.scopes == other.scopes
-
-    @property
-    def is_empty(self) -> bool:
-        """True iff this ScopeSet contains no scopes."""
-        return not self.scopes
+    def __getitem__(self, item: Union[int, slice]) -> Union[Scope, "ScopeSet"]:
+        if isinstance(item, slice):
+            return ScopeSet(self.scopes[item])
+        return self.scopes[item]

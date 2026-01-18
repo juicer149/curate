@@ -24,7 +24,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 
 addopts = [
-    "--cov=curate",
+    "--cov=curate_next",
     "--cov-report=term-missing",
     "--cov-report=html",
 ]

@@ -1,78 +1,24 @@
-"""curate.compile — compilation facade (stateless)
+"""
+curate.compile — compilation facade
 
-Primary functions:
-- compile_scope_set: one source -> ScopeSet
-- compile_scope_sets: many sources -> ScopeSet (concatenated id-space)
+Selects a syntax-tree producer and compiles source text
+into a deterministic, laminar ScopeSet.
 
-No caching.
-No lifecycle.
-Deterministic.
+No interpretation.
+No project or workspace awareness.
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Sequence
-
-from .facts import Scope, ScopeSet
-from .producers.treesitter import build_scope_set as treesitter_build
+from .facts import ScopeSet
+from .producers.treesitter import build_scope_set
 
 
-@dataclass(frozen=True, slots=True)
-class SourceUnit:
+def compile_scope_set(*, source: str, language: str = "default") -> ScopeSet:
     """
-    Compilation unit.
+    Compile source text into structural facts.
 
-    Fields:
-        source:
-            Full source text.
-        language:
-            Language key (e.g. "python", "default").
-        backend:
-            Backend key (currently only "treesitter").
-            Present for future extensibility without changing the unit shape.
+    Guarantees:
+    - always returns a ScopeSet
+    - always contains a root scope
+    - never raises on parse failure
     """
-    source: str
-    language: str = "default"
-    backend: str = "treesitter"
-
-
-def compile_scope_set(*, source: str, language: str = "default", backend: str = "treesitter") -> ScopeSet:
-    if backend != "treesitter":
-        # Safe fallback: default treesitter behavior
-        backend = "treesitter"
-
-    return treesitter_build(source=source, language=(language or "default"))
-
-
-def compile_scope_sets(units: Sequence[SourceUnit]) -> ScopeSet:
-    """
-    Compile many sources and concatenate into a single id-space.
-
-    Semantics:
-    - scopes from each unit are appended
-    - ids are rebased via offset to avoid collisions
-    - parent_id is rebased consistently
-    - deterministic ordering barrier at the end
-    """
-    scopes: list[Scope] = []
-    offset = 0
-
-    for u in units:
-        ss = compile_scope_set(source=u.source, language=u.language, backend=u.backend)
-
-        for s in ss:
-            scopes.append(
-                Scope(
-                    id=s.id + offset,
-                    parent_id=None if s.parent_id is None else s.parent_id + offset,
-                    kind=s.kind,
-                    start=s.start,
-                    end=s.end,
-                )
-            )
-
-        offset += (max((s.id for s in ss), default=-1) + 1)
-
-    scopes.sort(key=lambda s: (s.start, -s.end, s.id))
-    return ScopeSet(tuple(scopes))
+    return build_scope_set(source=source, language=language)

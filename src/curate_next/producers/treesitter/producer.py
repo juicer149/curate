@@ -1,96 +1,76 @@
-"""treesitter.producer — generic Tree-sitter -> ScopeSet compiler
+"""treesitter.producer — syntax tree → ScopeSet
 
-Algorithm (structural only):
-1) Load LanguageSpec by key
-2) If no loader -> fallback to module-only ScopeSet
-3) Parse source with Tree-sitter
-4) Walk syntax tree:
-   - wrapper forwarding (start_line override into child)
-   - emit Scope when node.type in rules.scope_node_types
-5) Return ScopeSet with deterministic ordering
+This module:
+- walks Tree-sitter trees
+- emits laminar structural facts
+- assigns hierarchical ids
 
-Non-goals:
-- no header/body splitting
-- no doc detection
-- no filtering/policy
+No interpretation.
 """
 
-from __future__ import annotations
-
-from typing import Optional
-
 from tree_sitter import Parser
-
-from ...facts import Scope, ScopeSet
+from ...facts import Scope, ScopeSet, ScopeId
 from .registry import LANGUAGES
 
 
-def _module_only(source: str) -> ScopeSet:
-    # Use count("\n")+1 to match editor line model (trailing newline adds a line)
-    total_lines = max(1, source.count("\n") + 1)
-    return ScopeSet((Scope(id=0, parent_id=None, kind="module", start=1, end=total_lines),))
-
-
 def build_scope_set(*, source: str, language: str) -> ScopeSet:
-    spec = LANGUAGES.get((language or "default").lower(), LANGUAGES["default"])
+    spec = LANGUAGES.get(language, LANGUAGES["default"])
+
+    total_lines = max(1, source.count("\n") + 1)
+    root = Scope(id=(0,), kind="module", start=1, end=total_lines)
 
     if spec.loader is None:
-        return _module_only(source)
+        return ScopeSet((root,))
 
     try:
         parser = Parser(spec.loader())
         tree = parser.parse(source.encode("utf-8", errors="replace"))
-        root = tree.root_node
+        root_node = tree.root_node
     except Exception:
-        return _module_only(source)
+        return ScopeSet((root,))
 
-    scopes: list[Scope] = [
-        Scope(id=0, parent_id=None, kind="module", start=1, end=max(1, root.end_point[0] + 1))
-    ]
-    next_id = 1
+    scopes = [root]
+    counters: dict[ScopeId, int] = {(0,): 0}
 
-    def walk(node, parent_id: int, forced_start: Optional[int] = None) -> None:
-        nonlocal next_id
+    rules = spec.rules
 
-        # 1) Wrapper forwarding
-        for wr in spec.rules.wrapper_rules:
-            if node.type == wr.wrapper_type:
-                for ch in node.children:
-                    if ch.type in wr.target_types:
-                        wrapper_start = node.start_point[0] + 1
-                        walk(ch, parent_id, forced_start=wrapper_start)
+    def next_id(parent: ScopeId) -> ScopeId:
+        n = counters.get(parent, 0)
+        counters[parent] = n + 1
+        return parent + (n,)
 
-                        # Walk remaining children as transparent structure
-                        for other in node.children:
-                            if other is not ch:
-                                walk(other, parent_id)
-                        return
+    def span(node) -> int:
+        return node.end_point[0] - node.start_point[0] + 1
 
-        # 2) Scope emission
-        if node.type in spec.rules.scope_node_types:
-            start = node.start_point[0] + 1
-            end = node.end_point[0] + 1
+    def should_emit(node) -> bool:
+        if node.type in rules.exclude:
+            return False
+        if node.type not in rules.include:
+            return False
+        if rules.only_multiline and span(node) < 2:
+            return False
+        return True
 
-            # forced_start may only move start earlier
-            if forced_start is not None and forced_start < start:
-                start = forced_start
+    def walk(node, parent_id: ScopeId):
+        current_parent = parent_id
 
-            sid = next_id
-            next_id += 1
+        if should_emit(node):
+            sid = next_id(parent_id)
+            scopes.append(
+                Scope(
+                    id=sid,
+                    kind=node.type,
+                    start=node.start_point[0] + 1,
+                    end=max(node.end_point[0] + 1, node.start_point[0] + 1),
+                )
+            )
+            current_parent = sid
 
-            # Ensure end is at least start (defensive)
-            end = max(start, end)
-
-            scopes.append(Scope(id=sid, parent_id=parent_id, kind=node.type, start=start, end=end))
-            parent_id = sid
-
-        # 3) Recurse
         for ch in node.children:
-            walk(ch, parent_id)
+            walk(ch, current_parent)
 
-    for ch in root.children:
-        walk(ch, parent_id=0)
+    for ch in root_node.children:
+        walk(ch, (0,))
 
-    # Deterministic: outer first, stable tie-break by id
     scopes.sort(key=lambda s: (s.start, -s.end, s.id))
     return ScopeSet(tuple(scopes))

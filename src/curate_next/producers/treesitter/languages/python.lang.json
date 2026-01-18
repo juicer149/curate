@@ -1,0 +1,29 @@
+{
+  "language": "python",
+  "scopes": {
+    "include": [
+      "module",
+      "class_definition",
+      "function_definition",
+      "block",
+      "if_statement",
+      "for_statement",
+      "while_statement",
+      "try_statement",
+      "with_statement",
+      "match_statement",
+      "expression_statement",
+      "string",
+      "comment"
+    ],
+    "exclude": [
+      "identifier",
+      "integer",
+      "float",
+      "string_start",
+      "string_end",
+      "string_content"
+    ],
+    "only_multiline": true
+  }
+}

@@ -1,8 +1,8 @@
 """
-curate.producers
+curate.producers — producer backends (core)
 
-Producer backends that compile:
-    source text -> ScopeSet
+A producer converts:
+    (source text, language key) -> ScopeSet
 
-The core package stays producer-agnostic; `compile.py` selects a backend.
+Curate core treats producers as implementation details.
 """
