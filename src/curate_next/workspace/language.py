@@ -1,5 +1,4 @@
-"""
-curate.workspace.language — language resolution
+"""curate.workspace.language — language resolution
 
 Pure metadata resolution.
 No parsing. No interpretation.

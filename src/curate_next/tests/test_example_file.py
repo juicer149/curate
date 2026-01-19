@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from curate_next import compile_scope_set, relations
+from curate_next import compile_scope_set
+from curate_next import relations
+from curate_next.relations import relation
 from curate_next.facts import Scope, ScopeSet
 from curate_next.workspace import (
     FileUnit,
@@ -13,7 +15,6 @@ from curate_next.workspace import (
     parent_of,
     children_of,
 )
-
 
 # ---------------------------------------------------------------------------
 # Example source (single source of truth for all tests)
@@ -39,7 +40,6 @@ class Foo:
             return -x
 """.strip()
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ def test_compile_produces_root_scope():
     scopes = build_scopes()
 
     root = scopes[0]
-    assert root.id == (0,)
+    assert root.address == (0,)
     assert root.label == "module"
     assert root.start == 1
     assert root.end >= root.start
@@ -70,14 +70,14 @@ def test_scopes_are_laminar_and_ordered():
     scopes = build_scopes()
 
     for s in scopes:
-        # id invariant
-        assert len(s.id) >= 1
+        # address invariant
+        assert len(s.address) >= 1
         # span invariant
         assert s.start <= s.end
 
     # deterministic ordering invariant
     for a, b in zip(scopes, scopes[1:]):
-        assert (a.start, -a.end, a.id) <= (b.start, -b.end, b.id)
+        assert (a.start, -a.end, a.address) <= (b.start, -b.end, b.address)
 
 
 def test_expected_scope_labels_exist():
@@ -102,7 +102,7 @@ def test_parent_relationship_is_algebraic():
     parent = relations.parent(scopes, func)
 
     assert parent is not None
-    assert parent.id == func.parent_id
+    assert parent.address == func.parent_address
 
 
 def test_function_is_nested_in_class_via_ancestors():
@@ -134,7 +134,10 @@ def test_descendants_are_prefix_based():
     desc = relations.descendants(scopes, cls)
 
     assert desc
-    assert all(s.id[: len(cls.id)] == cls.id for s in desc)
+    assert all(
+        s.address[: len(cls.address)] == cls.address
+        for s in desc
+    )
     assert any(s.label == "function_definition" for s in desc)
 
 
@@ -210,3 +213,16 @@ def test_workspace_parent_child_hierarchy(tmp_path: Path):
     # root children include file
     children = children_of(ws, ws.root.id)
     assert any(ch.id == file_id for ch in children)
+
+
+# ---------------------------------------------------------------------------
+# Relations dispatch tests
+# ---------------------------------------------------------------------------
+
+def test_relation_dispatch_unary_and_binary():
+    scopes = build_scopes()
+    func = next(s for s in scopes if s.label == "function_definition")
+
+    assert relation(scopes, func, "depth") == len(func.address) - 1
+    assert relation(scopes, func, "is_root") is False
+    assert relation(scopes, scopes[0], "is_root") is True

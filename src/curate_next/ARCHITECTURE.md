@@ -56,6 +56,38 @@ Curate plays the same role:
 
 ---
 
+## Mental model: Structural addresses (postal codes)
+
+Each `Scope` is identified by a **hierarchical address**, not an identity.
+
+An address behaves like a postal code:
+
+- The first segment identifies a very broad region
+- Each subsequent segment narrows the region
+- No segment implies ownership, meaning, or importance
+- Two scopes with similar prefixes are *near* each other structurally
+
+Example:
+
+```
+
+(0,)            # module
+(0, 1)          # second top-level region
+(0, 1, 0)       # first nested region inside it
+(0, 1, 0, 2)    # third sub-region of that region
+
+```
+
+The address does **not** describe:
+
+- semantic identity
+- execution order
+- uniqueness across files
+
+It describes **where a structural region lives**, and nothing more.
+
+---
+
 ## Core responsibilities
 
 Curate does **exactly three things**:
@@ -86,7 +118,7 @@ Nothing more.
   Compilation facade.  
   Selects producer, emits facts.
 
-Everything else (queries, workspaces, interpretation) lives above.
+Everything else (relations, workspaces, interpretation) lives above.
 
 ---
 
@@ -104,37 +136,42 @@ A `Scope` contains:
 - `start`, `end`  
   **1-based inclusive** line spans.
 
-- `id`  
+- `address`  
   A **hierarchical structural address**: `tuple[int, ...]`
 
 No other data is stored.
 
 ---
 
-## Hierarchical ids (laminar by construction)
+## Hierarchical addresses (laminar by construction)
 
-The `id` encodes structure directly.
+The `address` encodes structure directly.
 
 - The root scope is always:
-  ```text
-  (0,)
-````
 
-* Children append one element:
+```
 
-  ```text
-  (0,) → (0, 0) → (0, 0, 1)
-  ```
+(0,)
 
-* The parent id is always:
+```
 
-  ```py
-  scope.id[:-1]
-  ```
+- Children append one element:
+
+```
+
+(0,) → (0, 0) → (0, 0, 1)
+
+```
+
+- The parent address is always:
+
+```py
+scope.address[:-1]
+```
 
 ### Consequences
 
-Because hierarchy is encoded in the id:
+Because hierarchy is encoded in the address:
 
 * Parent/child/ancestor relations are **algebraic**
 * No index is required for correctness
@@ -151,7 +188,7 @@ For the same input:
 
 * The same scopes are emitted
 * In the same order
-* With the same ids
+* With the same addresses
 * With the same spans
 
 This makes Curate suitable for:
@@ -176,7 +213,7 @@ Instead:
 
 In Python, Tree-sitter represents **docstrings** as:
 
-```text
+```
 block
 └─ expression_statement
    └─ string
@@ -293,7 +330,7 @@ Curate is therefore a **foundation**, not a feature.
 >>>
 >>> scopes = compile_scope_set(source=src, language="python")
 >>> for s in scopes:
-...     print(s.id, s.label, s.start, s.end)
+...     print(s.address, s.label, s.start, s.end)
 ```
 
 Output shows:

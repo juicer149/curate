@@ -1,12 +1,12 @@
-"""
-curate.workspace — project / file / folder adapter around Curate core
+"""curate.workspace — project / file / folder adapter around Curate core
 
 This layer:
 - introduces folders and files as structural containers
 - resolves language per file
-- delegates syntax extraction to Curate
+- delegates syntax extraction to Curate core
 - produces a unified laminar hierarchy:
-      workspace → folders → files → scopes
+
+    workspace → folders → files → scopes
 
 Non-goals:
 - no semantic interpretation

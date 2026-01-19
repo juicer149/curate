@@ -4,11 +4,11 @@ This document describes the *logic*, *cost model*, and *design rationale* behind
 
 It is intentionally separate from ARCHITECTURE.md.
 
-* ARCHITECTURE.md describes **what exists**
-* LOGIC.md describes **why it exists this way**
+- ARCHITECTURE.md describes **what exists**
+- LOGIC.md describes **why it exists this way**
 
-Curate is not optimized for maximal feature coverage or asymptotic micro‑benchmarks.
-It is optimized for **minimal structural complexity**, **predictable cost**, and **long‑term correctness**.
+Curate is not optimized for maximal feature coverage or asymptotic micro-benchmarks.  
+It is optimized for **minimal structural complexity**, **predictable cost**, and **long-term correctness**.
 
 ---
 
@@ -16,15 +16,15 @@ It is optimized for **minimal structural complexity**, **predictable cost**, and
 
 > **Minimize what exists before optimizing how fast it runs.**
 
-The fastest operation is the one that never needs to happen.
+The fastest operation is the one that never needs to happen.  
 The most robust invariant is the one that never needs to be maintained.
 
 Curate therefore focuses on:
 
-* minimizing representations
-* minimizing invariants
-* minimizing hidden state
-* concentrating unavoidable cost at construction time
+- minimizing representations
+- minimizing invariants
+- minimizing hidden state
+- concentrating unavoidable cost at construction time
 
 ---
 
@@ -36,11 +36,11 @@ Curate answers exactly one question:
 
 Curate does **not**:
 
-* interpret meaning
-* classify semantics
-* assign importance
-* evaluate execution
-* optimize behavior
+- interpret meaning
+- classify semantics
+- assign importance
+- evaluate execution
+- optimize behavior
 
 It extracts *structure* from text and records it as immutable facts.
 
@@ -54,31 +54,31 @@ All performance characteristics in Curate depend on a single quantity:
 
 Crucially:
 
-* `n` is **not** number of lines
-* `n` is **not** number of tokens
-* `n` is **not** number of syntax tree nodes
+- `n` is **not** number of lines
+- `n` is **not** number of tokens
+- `n` is **not** number of syntax tree nodes
 
 Scopes represent **structural regions that own space**:
 
-* modules
-* blocks
-* classes
-* functions
-* control structures (`if`, `for`, `while`, etc.)
+- modules
+- blocks
+- classes
+- functions
+- control structures (`if`, `for`, `while`, etc.)
 
 As a result:
 
-* `n` grows with *conceptual structure*, not file size
-* flat code does not inflate `n`
-* deeply nested code increases `n`
+- `n` grows with *conceptual structure*, not file size
+- flat code does not inflate `n`
+- deeply nested code increases `n`
 
 In real-world, hand-written code:
 
-* `n < 50` is common
-* `n < 100` is typical
-* `n > 200` is unusual
-* `n > 500` is extremely rare
-* `n > 1000` almost always indicates generated or structurally poor code
+- `n < 50` is common
+- `n < 100` is typical
+- `n > 200` is unusual
+- `n > 500` is extremely rare
+- `n > 1000` almost always indicates generated or structurally poor code
 
 Structural depth is similarly bounded; deep nesting is a code smell, not a Curate problem.
 
@@ -88,24 +88,44 @@ Structural depth is similarly bounded; deep nesting is a code smell, not a Curat
 
 Curate enforces laminar structure **by construction**, not by validation.
 
-Each scope has a hierarchical tuple ID:
+Each scope has a hierarchical tuple **address**:
 
 ```
+
 (0,)            # root
 (0, 0)          # first child
 (0, 0, 1)       # second child of that child
+
 ```
 
 This encoding guarantees:
 
-* parent/child relations via prefix algebra
-* no partial overlaps
-* deterministic ordering
-* no cycles
+- parent/child relations via prefix algebra
+- no partial overlaps
+- deterministic ordering
+- no cycles
 
 No runtime checks are required to maintain these properties.
 
-Correctness is achieved by representation choice, not defensive logic.
+Correctness is achieved by **representation choice**, not defensive logic.
+
+---
+
+## Addresses as Structural Cost Boundaries
+
+Addresses behave like **hierarchical postal codes**:
+
+- each additional segment narrows scope
+- cost is contained within subtrees
+- unrelated regions never interact
+
+This yields natural cost containment:
+
+- large functions increase cost *locally*
+- deep nesting affects only descendants
+- flat siblings remain cheap to traverse
+
+Structural cost distributes **vertically**, not horizontally.
 
 ---
 
@@ -117,11 +137,11 @@ Curate explicitly separates **construction cost** from **query cost**.
 
 Paid once per input:
 
-* parsing
-* syntax tree traversal
-* scope extraction
-* hierarchical ID assignment
-* deterministic ordering
+- parsing
+- syntax tree traversal
+- scope extraction
+- hierarchical address assignment
+- deterministic ordering
 
 This is the only phase where structure is created.
 
@@ -129,87 +149,116 @@ This is the only phase where structure is created.
 
 After construction:
 
-* no structure is created
-* no caches are mutated
-* no invariants are maintained
+- no structure is created
+- no caches are mutated
+- no invariants are maintained
 
 Queries operate purely over immutable facts.
 
 This separation yields:
 
-* predictable performance
-* zero invalidation logic
-* clear debugging boundaries
-* transparent cost model
+- predictable performance
+- zero invalidation logic
+- clear debugging boundaries
+- transparent cost model
 
 ---
 
 ## Why Relations Are O(n)
 
-All structural relations (`parent`, `ancestors`, `descendants`, etc.) are implemented as linear scans.
+All structural relations (`parent`, `children`, `ancestors`, `descendants`, etc.)
+are implemented as linear scans.
 
 This is deliberate.
 
 Given that:
 
-* `n` is small and structurally bounded
-* scopes are file‑local
-* comparisons are simple tuple and interval checks
-* memory access is cache‑friendly
+- `n` is small and structurally bounded
+- scopes are file-local
+- comparisons are simple tuple prefix checks
+- memory access is cache-friendly
 
 …the constant factors dominate, not asymptotic complexity.
 
-Empirically, these operations execute in microseconds and are suitable for interactive use (editors, AI context selection, navigation).
+Empirically, these operations execute in microseconds and are suitable for:
+
+- interactive editors
+- navigation
+- folding
+- AI context selection
 
 ---
 
 ## Why There Are No Indexes in Core
 
 Indexes are not free optimizations.
+
 They are **alternative representations** with their own:
 
-* state
-* invariants
-* lifecycle
-* invalidation rules
+- state
+- invariants
+- lifecycle
+- invalidation rules
 
 Curate core intentionally contains **no indexes**:
 
-* `Scope` and `ScopeSet` are the sole source of truth
-* relations are algebraic and verifiable
-* no auxiliary state can become stale
+- `Scope` and `ScopeSet` are the sole source of truth
+- relations are algebraic and verifiable
+- no auxiliary state can become stale
 
 If a consumer requires faster queries for a specific workload, indexes may be built **outside Curate**:
 
-* in adapters
-* in workspace layers
-* in editor‑ or application‑specific code
+- in adapters
+- in workspace layers
+- in editor- or application-specific code
 
 This keeps Curate minimal while preserving extensibility.
 
 ---
 
+## Dispatch Is Not Semantics
+
+String-based dispatch (e.g. `relation(scopes, scope, "ancestors")`) is an **adapter**, not a query language.
+
+It provides:
+
+- dynamic selection
+- UI / CLI / LSP compatibility
+- stable symbolic names
+
+It does **not** introduce:
+
+- interpretation
+- composition
+- filtering
+- policy
+
+All dispatched relations are pure structural functions.
+
+---
+
 ## Locality and Hierarchical Cost Containment
 
-Tuple‑based IDs provide **locality by construction**.
+Tuple-based addresses provide **locality by construction**.
 
-Structural cost distributes vertically, not horizontally:
+Structural cost mirrors hierarchy directly:
 
-* large functions increase cost *locally*
-* deep nesting affects only its subtree
-* unrelated files and modules remain unaffected
+```
+
+project
+└─ folder
+└─ file
+└─ scopes
+
+```
+
+Structural complexity at one level does not leak into others.
 
 This ensures:
 
-* poor structure has local cost
-* good structure is rewarded
-* global performance remains stable
-
-Curate mirrors the project hierarchy directly:
-
-* project → folders → files → scopes
-
-Structural complexity at one level does not leak into others.
+- poor structure has local cost
+- good structure is rewarded
+- global performance remains stable
 
 ---
 
@@ -217,9 +266,9 @@ Structural complexity at one level does not leak into others.
 
 Because Curate reflects structure faithfully, performance correlates with architectural quality:
 
-* well‑structured projects → low `n` at every level
-* small files → small local scope sets
-* shallow nesting → cheap traversal
+- well-structured projects → low `n` at every level
+- small files → small local scope sets
+- shallow nesting → cheap traversal
 
 This creates a reinforcing effect:
 
@@ -227,12 +276,12 @@ This creates a reinforcing effect:
 
 This applies to:
 
-* navigation
-* context extraction
-* tokenization
-* AI prompting
+- navigation
+- context extraction
+- tokenization
+- AI prompting
 
-Curate does not attempt to normalize or hide poor structure.
+Curate does not attempt to normalize or hide poor structure.  
 It makes it visible and local.
 
 ---
@@ -241,9 +290,9 @@ It makes it visible and local.
 
 Curate treats structural cost as *information*, not noise.
 
-* large files produce larger local `n`
-* deeply nested code produces deeper hierarchies
-* complexity remains observable
+- large files produce larger local `n`
+- deeply nested code produces deeper hierarchies
+- complexity remains observable
 
 This is intentional.
 
@@ -253,15 +302,15 @@ Curate aligns performance with structural reality rather than masking it with ab
 
 ## Design Summary
 
-* Structure is extracted once and never mutated
-* Complexity is eliminated by representation choice
-* Linear traversal is preferred over persistent indexes
-* Cost is local, predictable, and transparent
-* Extensions may add indexes; core remains minimal
+- Structure is extracted once and never mutated
+- Complexity is eliminated by representation choice
+- Linear traversal is preferred over persistent indexes
+- Cost is local, predictable, and transparent
+- Extensions may add indexes; core remains minimal
 
-Curate optimizes for **clarity, correctness, and long‑term system health**, not micro‑benchmarked asymptotic performance.
+Curate optimizes for **clarity, correctness, and long-term system health**, not micro-benchmarked asymptotic performance.
 
 ---
 
-> **Curate records where structure exists.
+> **Curate records where structure exists.  
 > Others decide what to do with it.**

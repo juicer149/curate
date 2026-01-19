@@ -3,13 +3,14 @@
 This module:
 - walks Tree-sitter trees
 - emits laminar structural facts
-- assigns hierarchical ids
+- assigns hierarchical addresses
 
 No interpretation.
 """
 
 from tree_sitter import Parser
-from ...facts import Scope, ScopeSet, ScopeId
+
+from ...facts import Scope, ScopeSet, ScopeAddress
 from .registry import LANGUAGES
 
 
@@ -17,7 +18,12 @@ def build_scope_set(*, source: str, language: str) -> ScopeSet:
     spec = LANGUAGES.get(language, LANGUAGES["default"])
 
     total_lines = max(1, source.count("\n") + 1)
-    root = Scope(id=(0,), label="module", start=1, end=total_lines)
+    root = Scope(
+        address=(0,),
+        label="module",
+        start=1,
+        end=total_lines,
+    )
 
     if spec.loader is None:
         return ScopeSet((root,))
@@ -29,12 +35,12 @@ def build_scope_set(*, source: str, language: str) -> ScopeSet:
     except Exception:
         return ScopeSet((root,))
 
-    scopes = [root]
-    counters: dict[ScopeId, int] = {(0,): 0}
+    scopes: list[Scope] = [root]
+    counters: dict[ScopeAddress, int] = {(0,): 0}
 
     rules = spec.rules
 
-    def next_id(parent: ScopeId) -> ScopeId:
+    def next_address(parent: ScopeAddress) -> ScopeAddress:
         n = counters.get(parent, 0)
         counters[parent] = n + 1
         return parent + (n,)
@@ -51,20 +57,23 @@ def build_scope_set(*, source: str, language: str) -> ScopeSet:
             return False
         return True
 
-    def walk(node, parent_id: ScopeId):
-        current_parent = parent_id
+    def walk(node, parent_addr: ScopeAddress) -> None:
+        current_parent = parent_addr
 
         if should_emit(node):
-            sid = next_id(parent_id)
+            addr = next_address(parent_addr)
             scopes.append(
                 Scope(
-                    id=sid,
+                    address=addr,
                     label=node.type,
                     start=node.start_point[0] + 1,
-                    end=max(node.end_point[0] + 1, node.start_point[0] + 1),
+                    end=max(
+                        node.end_point[0] + 1,
+                        node.start_point[0] + 1,
+                    ),
                 )
             )
-            current_parent = sid
+            current_parent = addr
 
         for ch in node.children:
             walk(ch, current_parent)
@@ -72,5 +81,5 @@ def build_scope_set(*, source: str, language: str) -> ScopeSet:
     for ch in root_node.children:
         walk(ch, (0,))
 
-    scopes.sort(key=lambda s: (s.start, -s.end, s.id))
+    scopes.sort(key=lambda s: (s.start, -s.end, s.address))
     return ScopeSet(tuple(scopes))

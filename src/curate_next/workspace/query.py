@@ -3,7 +3,7 @@
 
 from pathlib import Path
 from typing import Tuple
-from .model import Workspace, WorkspaceNode, WorkspaceScope, NodeId, NodeKind
+from .model import Workspace, WorkspaceNode, WorkspaceScope, NodeId
 
 
 def node_by_path(ws: Workspace, path: Path) -> WorkspaceNode | None:
@@ -30,4 +30,4 @@ def scopes_in_file(ws: Workspace, file: Path | NodeId) -> Tuple[WorkspaceScope, 
 
 
 def scopes_under(ws: Workspace, nid: NodeId) -> Tuple[WorkspaceScope, ...]:
-    return tuple(s for s in ws.scopes if s.id[:len(nid)] == nid)
+    return tuple(s for s in ws.scopes if s.id[: len(nid)] == nid)

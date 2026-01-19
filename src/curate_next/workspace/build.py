@@ -1,4 +1,5 @@
-"""curate.workspace.build — workspace construction"""
+"""curate.workspace.build — workspace construction
+"""
 
 from pathlib import Path
 from typing import Iterable, Dict, List
@@ -26,6 +27,7 @@ def build_workspace(
     resolver = resolver or default_language_resolver()
     units = list(files)
 
+    # Empty workspace
     if not units:
         root_path = (root or Path(".")).resolve()
         root_node = WorkspaceNode((0,), NodeKind.ROOT, root_path.name, root_path)
@@ -36,6 +38,7 @@ def build_workspace(
 
     trie = TrieNode(name=base.name, path=base)
 
+    # Build folder/file trie
     for _, path in abs_units:
         rel = path.relative_to(base)
         node = trie
@@ -83,7 +86,7 @@ def build_workspace(
         for s in scope_set:
             scopes.append(
                 WorkspaceScope(
-                    id=file_id + s.id,
+                    id=file_id + s.address,
                     label=s.label,
                     start=s.start,
                     end=s.end,

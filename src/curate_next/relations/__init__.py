@@ -1,8 +1,11 @@
 """
 curate.relations — algebraic relations over structural facts.
 
-This package exposes structural relations derived purely
-from Scope.id (hierarchical structural addresses).
+This package exposes structural relations derived purely from Scope.address.
+
+It provides:
+- core: explicit typed relation functions
+- dispatch: optional string-based adapter for dynamic selection (UI/CLI/LSP)
 
 Relations are:
 - deterministic
@@ -22,7 +25,14 @@ from .core import (
     depth,
 )
 
+from .dispatch import (
+    relation,
+    available_relations,
+    RELATIONS,
+)
+
 __all__ = [
+    # core
     "parent",
     "children",
     "siblings",
@@ -30,4 +40,8 @@ __all__ = [
     "descendants",
     "is_root",
     "depth",
+    # dispatch adapter
+    "relation",
+    "available_relations",
+    "RELATIONS",
 ]

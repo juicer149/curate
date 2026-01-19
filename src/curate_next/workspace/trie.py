@@ -1,7 +1,7 @@
 """
 curate.workspace.trie — deterministic path trie
 
-Builds a tree of folders/files before assigning ids.
+Builds a tree of folders/files before assigning NodeIds.
 """
 
 from __future__ import annotations

@@ -1,11 +1,10 @@
-"""
-curate.workspace.model — workspace ontology
+"""curate.workspace.model — workspace ontology
 
 Defines containers (root/folder/file) and scoped facts.
 
 Core principles:
 - folders and files are NOT scopes
-- scopes come only from Curate
+- scopes come only from Curate core
 - hierarchy is encoded purely in NodeId tuples
 """
 
@@ -51,6 +50,10 @@ class WorkspaceNode:
 class WorkspaceScope:
     """
     Curate Scope lifted into workspace hierarchy.
+
+    Note:
+    - id is a workspace NodeId (file_id + scope.address)
+    - file_id refers to the FILE node containing this scope
     """
 
     id: NodeId
