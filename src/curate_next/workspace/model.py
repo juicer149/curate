@@ -42,7 +42,7 @@ class WorkspaceNode:
     """
 
     id: NodeId
-    kind: NodeKind
+    label: NodeKind
     name: str
     path: Path
 
@@ -54,7 +54,7 @@ class WorkspaceScope:
     """
 
     id: NodeId
-    kind: str
+    label: str
     start: int
     end: int
     file_id: NodeId
@@ -67,7 +67,7 @@ class Workspace:
 
     Invariants:
     - root.id == (0,)
-    - root.kind == NodeKind.ROOT
+    - root.label == NodeKind.ROOT
     - every WorkspaceScope.file_id exists and is FILE
     - ids are deterministic for identical inputs
     """

@@ -48,8 +48,8 @@ def build_scopes() -> ScopeSet:
     return compile_scope_set(source=SRC, language="python")
 
 
-def scope_by_kind(scopes: ScopeSet, kind: str) -> list[Scope]:
-    return [s for s in scopes if s.kind == kind]
+def scope_by_label(scopes: ScopeSet, label: str) -> list[Scope]:
+    return [s for s in scopes if s.label == label]
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ def test_compile_produces_root_scope():
 
     root = scopes[0]
     assert root.id == (0,)
-    assert root.kind == "module"
+    assert root.label == "module"
     assert root.start == 1
     assert root.end >= root.start
 
@@ -80,15 +80,15 @@ def test_scopes_are_laminar_and_ordered():
         assert (a.start, -a.end, a.id) <= (b.start, -b.end, b.id)
 
 
-def test_expected_scope_kinds_exist():
+def test_expected_scope_labels_exist():
     scopes = build_scopes()
-    kinds = {s.kind for s in scopes}
+    labels = {s.label for s in scopes}
 
-    assert "module" in kinds
-    assert "class_definition" in kinds
-    assert "function_definition" in kinds
-    assert "if_statement" in kinds
-    assert "string" in kinds  # docstrings
+    assert "module" in labels
+    assert "class_definition" in labels
+    assert "function_definition" in labels
+    assert "if_statement" in labels
+    assert "string" in labels  # docstrings
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ def test_expected_scope_kinds_exist():
 def test_parent_relationship_is_algebraic():
     scopes = build_scopes()
 
-    func = scope_by_kind(scopes, "function_definition")[0]
+    func = scope_by_label(scopes, "function_definition")[0]
     parent = relations.parent(scopes, func)
 
     assert parent is not None
@@ -108,34 +108,34 @@ def test_parent_relationship_is_algebraic():
 def test_function_is_nested_in_class_via_ancestors():
     scopes = build_scopes()
 
-    func = scope_by_kind(scopes, "function_definition")[0]
-    kinds = [s.kind for s in relations.ancestors(scopes, func)]
+    func = scope_by_label(scopes, "function_definition")[0]
+    labels = [s.label for s in relations.ancestors(scopes, func)]
 
-    assert "class_definition" in kinds
-    assert kinds[-1] == "module"
+    assert "class_definition" in labels
+    assert labels[-1] == "module"
 
 
 def test_ancestors_chain_order_and_content():
     scopes = build_scopes()
 
-    if_scope = scope_by_kind(scopes, "if_statement")[0]
+    if_scope = scope_by_label(scopes, "if_statement")[0]
     ancestors = relations.ancestors(scopes, if_scope)
 
     # nearest first, root last
-    assert ancestors[-1].kind == "module"
-    assert any(s.kind == "function_definition" for s in ancestors)
-    assert any(s.kind == "class_definition" for s in ancestors)
+    assert ancestors[-1].label == "module"
+    assert any(s.label == "function_definition" for s in ancestors)
+    assert any(s.label == "class_definition" for s in ancestors)
 
 
 def test_descendants_are_prefix_based():
     scopes = build_scopes()
 
-    cls = scope_by_kind(scopes, "class_definition")[0]
+    cls = scope_by_label(scopes, "class_definition")[0]
     desc = relations.descendants(scopes, cls)
 
     assert desc
     assert all(s.id[: len(cls.id)] == cls.id for s in desc)
-    assert any(s.kind == "function_definition" for s in desc)
+    assert any(s.label == "function_definition" for s in desc)
 
 
 # ---------------------------------------------------------------------------
@@ -155,14 +155,14 @@ def test_workspace_build_and_file_node(tmp_path: Path):
 
     # workspace root represents the filesystem root folder
     assert ws.root.id == (0,)
-    assert ws.root.kind.value == "folder"
+    assert ws.root.label.value == "folder"
     assert ws.root.path == tmp_path.resolve()
 
     # file node exists
     file_id = ws.path_to_id[file_path]
     file_node = ws.nodes[file_id]
 
-    assert file_node.kind.value == "file"
+    assert file_node.label.value == "file"
     assert file_node.name == "example.py"
     assert file_node.path == file_path.resolve()
 
@@ -202,7 +202,7 @@ def test_workspace_parent_child_hierarchy(tmp_path: Path):
     parent = parent_of(ws, file_id)
     assert parent is not None
     assert parent.id == ws.root.id
-    assert parent.kind.value == "folder"
+    assert parent.label.value == "folder"
 
     # workspace root has no parent
     assert parent_of(ws, parent.id) is None

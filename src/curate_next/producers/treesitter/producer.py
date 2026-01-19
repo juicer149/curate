@@ -17,7 +17,7 @@ def build_scope_set(*, source: str, language: str) -> ScopeSet:
     spec = LANGUAGES.get(language, LANGUAGES["default"])
 
     total_lines = max(1, source.count("\n") + 1)
-    root = Scope(id=(0,), kind="module", start=1, end=total_lines)
+    root = Scope(id=(0,), label="module", start=1, end=total_lines)
 
     if spec.loader is None:
         return ScopeSet((root,))
@@ -59,7 +59,7 @@ def build_scope_set(*, source: str, language: str) -> ScopeSet:
             scopes.append(
                 Scope(
                     id=sid,
-                    kind=node.type,
+                    label=node.type,
                     start=node.start_point[0] + 1,
                     end=max(node.end_point[0] + 1, node.start_point[0] + 1),
                 )

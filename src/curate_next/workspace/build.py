@@ -52,14 +52,14 @@ def build_workspace(
     path_to_id: Dict[Path, NodeId] = {}
 
     def assign(node: TrieNode, parent_id: NodeId) -> None:
-        kind = (
+        label = (
             NodeKind.ROOT if parent_id == ()
             else NodeKind.FILE if node.is_file
             else NodeKind.FOLDER
         )
 
         nid = parent_id
-        ws_node = WorkspaceNode(nid, kind, node.name, node.path)
+        ws_node = WorkspaceNode(nid, label, node.name, node.path)
         nodes[nid] = ws_node
         path_to_id[node.path] = nid
 
@@ -84,7 +84,7 @@ def build_workspace(
             scopes.append(
                 WorkspaceScope(
                     id=file_id + s.id,
-                    kind=s.kind,
+                    label=s.label,
                     start=s.start,
                     end=s.end,
                     file_id=file_id,

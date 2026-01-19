@@ -21,7 +21,7 @@ Curate is intentionally **not**:
 - a query engine or policy layer
 - a formatter, linter, or type checker
 - a file, folder, or workspace manager
-- a semantic analyzer of any kind
+- a semantic analyzer of any label
 
 Curate does **not** decide what is “important”, “documentation”, “header”, or “noise”.
 
@@ -98,7 +98,7 @@ Each fact is a `Scope`.
 
 A `Scope` contains:
 
-- `kind`  
+- `label`  
   The syntax-tree `node.type`, **verbatim**, producer-defined.
 
 - `start`, `end`  
@@ -293,7 +293,7 @@ Curate is therefore a **foundation**, not a feature.
 >>>
 >>> scopes = compile_scope_set(source=src, language="python")
 >>> for s in scopes:
-...     print(s.id, s.kind, s.start, s.end)
+...     print(s.id, s.label, s.start, s.end)
 ```
 
 Output shows:

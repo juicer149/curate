@@ -26,7 +26,7 @@ class Scope:
             Hierarchical structural address.
             Parent is id[:-1].
 
-        kind:
+        label:
             Syntax node type (verbatim from Tree-sitter).
 
         start, end:
@@ -37,7 +37,7 @@ class Scope:
         - start <= end
     """
     id: ScopeId
-    kind: str
+    label: str
     start: int
     end: int
 
