@@ -1,4 +1,19 @@
 """curate.workspace.build — workspace construction
+
+Builds a unified, laminar hierarchy:
+
+    workspace → folders → files → scopes
+
+Responsibilities:
+- determine filesystem structure
+- assign deterministic NodeIds
+- resolve language per file
+- delegate scope extraction to Curate core
+
+Non-goals:
+- no parsing logic
+- no producer selection
+- no semantic interpretation
 """
 
 from pathlib import Path
@@ -38,7 +53,7 @@ def build_workspace(
 
     trie = TrieNode(name=base.name, path=base)
 
-    # Build folder/file trie
+    # Build folder / file trie
     for _, path in abs_units:
         rel = path.relative_to(base)
         node = trie
@@ -81,7 +96,12 @@ def build_workspace(
     for unit, path in abs_units:
         file_id = path_to_id[path]
         lang = resolver.resolve(unit)
-        scope_set = compile_scope_set(source=unit.source, language=lang)
+
+        scope_set = compile_scope_set(
+            source=unit.source,
+            language=lang,
+            producer=unit.producer,
+        )
 
         for s in scope_set:
             scopes.append(

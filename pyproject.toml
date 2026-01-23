@@ -3,16 +3,16 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "curate"
-version = "0.1.0"
+name = "curate-next"
+version = "0.2.0"
 requires-python = ">=3.10"
 dependencies = []
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
-[project.scripts]
-curate = "curate.__main__:main"
+[tool.setuptools.packages.find]
+where = ["src"]
 
 # ============================================================
 # Pytest + coverage
@@ -20,22 +20,18 @@ curate = "curate.__main__:main"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-testpaths = ["tests"]
+testpaths = ["src/curate_next/tests"]
 pythonpath = ["src"]
 
 addopts = [
-    "--cov=curate_next",
-    "--cov-report=term-missing",
-    "--cov-report=html",
+  "--cov=curate_next",
+  "--cov-report=term-missing",
+  "--cov-report=html",
 ]
 
 [tool.coverage.run]
 branch = true
-source = ["curate"]
-omit = [
-    "src/curate/cli.py",
-    "src/curate/__main__.py",
-]
+source = ["curate_next"]
 
 [tool.coverage.report]
 show_missing = true
@@ -47,12 +43,12 @@ skip_covered = false
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-cov",
-    "pytest-benchmark",
+  "pytest",
+  "pytest-cov",
+  "pytest-benchmark",
 ]
 
 treesitter = [
-    "tree-sitter>=0.25",
-    "tree-sitter-python>=0.25",
+  "tree-sitter>=0.25",
+  "tree-sitter-python>=0.25",
 ]

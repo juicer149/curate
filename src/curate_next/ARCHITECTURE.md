@@ -8,7 +8,8 @@ Curate answers one question only:
 
 Everything else is *explicitly* out of scope.
 
-Curate is designed to be a **stable, minimal, long-lived intermediate representation (IR)** that higher layers can depend on without fear of semantic drift.
+Curate is designed to be a **stable, minimal, long-lived intermediate representation (IR)**
+that higher layers can depend on without fear of semantic drift.
 
 ---
 
@@ -92,14 +93,20 @@ It describes **where a structural region lives**, and nothing more.
 
 Curate does **exactly three things**:
 
-1. **Select a producer**  
-   (e.g. Tree-sitter for a given language)
+1. **Select a producer via registry**
+   (string-keyed lookup, no conditionals)
 
 2. **Traverse the syntax tree**
 
 3. **Emit structural facts**
 
 Nothing more.
+
+Producer selection is performed via a registry:
+
+- Producers are identified by string keys
+- Producers are instantiated lazily
+- Missing or unavailable producers degrade explicitly to `noop`
 
 ---
 
@@ -161,13 +168,13 @@ The `address` encodes structure directly.
 
 (0,) → (0, 0) → (0, 0, 1)
 
-```
+````
 
 - The parent address is always:
 
 ```py
 scope.address[:-1]
-```
+````
 
 ### Consequences
 
@@ -197,6 +204,36 @@ This makes Curate suitable for:
 * incremental recomputation
 * editor integration
 * AI context building
+
+---
+
+## Totality guarantee (important)
+
+`compile_scope_set` is a **total function**.
+
+For any input:
+
+* any source text
+* any language key
+* any producer key
+* any runtime environment
+
+Curate guarantees that compilation:
+
+* **always returns a `ScopeSet`**
+* **never raises due to missing dependencies**
+* **never fails structurally**
+
+This is achieved by an explicit, first-class fallback producer (`noop`).
+
+Even in the complete absence of syntax-tree support, Curate still emits:
+
+* a single, well-defined module/root scope
+* covering the entire source text
+
+This guarantee is architectural, not incidental.
+
+Higher layers may therefore depend on Curate without defensive checks.
 
 ---
 
@@ -263,12 +300,30 @@ Curate supports multiple syntax-tree **producers** via a small plugin surface.
 
 A producer must:
 
-* accept `source: str` (+ optional `language: str`)
+* accept `source: str` and `language: str`
 * emit a `ScopeSet`
 * guarantee determinism and laminar structure
 * derive facts **only from syntax-tree structure**
 * never raise on parse failure
   (fallback to at least a module/root scope)
+
+### No-op producer (structural fallback)
+
+Curate includes a built-in `noop` producer.
+
+The noop producer:
+
+* requires no external dependencies
+* never inspects syntax
+* emits exactly one scope:
+
+  * the module/root scope
+  * spanning the entire source
+
+This producer is not an error case.
+
+It is a first-class structural baseline that guarantees Curate’s totality
+and enables safe use in editors, tests, and constrained environments.
 
 ### Tree-sitter
 
