@@ -1,22 +1,30 @@
-# curate_next/producers/noop.py
+"""
+curate_next.producers.noop — fallback producer (raw)
 
-from ..facts import Scope, ScopeSet
+Noop produces a single module-level RawScope spanning the entire file.
+
+This ensures:
+- every file has at least one raw structural fact
+- producers remain responsible for declaring structure
+- core does not need to special-case empty input
+"""
+
+from __future__ import annotations
+
+from curate_next.facts import Position, RawScope, RawScopeSet
 
 
-def build_scope_set(*, source: str, language: str) -> ScopeSet:
-    """
-    Fallback producer.
+def _total_lines(source: str) -> int:
+    return max(1, source.count("\n") + 1)
 
-    Produces a single module-level scope covering the entire source.
-    """
-    lines = source.splitlines()
-    end = max(len(lines), 1)
 
-    return ScopeSet((
-        Scope(
-            address=(0,),
-            label="module",
-            start=1,
-            end=end,
-        ),
-    ))
+def build_raw_scope_set(*, source: str, language: str) -> RawScopeSet:
+    total = _total_lines(source)
+
+    module = RawScope(
+        label="module",
+        start=Position(1),
+        end=Position(total),
+    )
+
+    return RawScopeSet((module,))

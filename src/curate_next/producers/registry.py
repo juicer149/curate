@@ -1,55 +1,51 @@
-# curate_next/producers/registry.py
-
 """
-Producer registry.
+curate_next.producers.registry — raw producer registry
 
-A producer is a backend that converts:
+A producer compiles:
+    (source: str, language: str) -> RawScopeSet
 
-    (source: str, language: str) -> ScopeSet
-
-Producers are selected by string key and instantiated lazily.
-Missing dependencies or import failures are handled by returning None,
-allowing the caller to apply an explicit fallback.
+Producers are optional-dependency friendly via lazy imports.
+The registry guarantees a safe fallback.
 """
 
-from typing import Callable, Dict, Optional
-from ..facts import ScopeSet
+from __future__ import annotations
 
-# Concrete producer callable signature
-Producer = Callable[..., ScopeSet]
+from typing import Callable, Dict, Protocol
+
+from curate_next.facts import RawScopeSet
 
 
-def _treesitter() -> Optional[Producer]:
-    """
-    Tree-sitter producer factory.
+class Producer(Protocol):
+    """Producer contract (keyword-only)."""
 
-    Returns:
-        build_scope_set callable if Tree-sitter dependencies are available,
-        otherwise None.
-    """
-    try:
-        from .treesitter import build_scope_set
-    except ImportError:
-        return None
-    return build_scope_set
+    def __call__(self, *, source: str, language: str) -> RawScopeSet:
+        ...
+
+
+Factory = Callable[[], Producer]
 
 
 def _noop() -> Producer:
+    from .noop import build_raw_scope_set
+    return build_raw_scope_set
+
+
+def _treesitter() -> Producer:
     """
-    No-op producer factory.
+    Optional producer.
 
-    Always available. Produces a single module-level scope
-    covering the entire source.
+    If treesitter is unavailable (missing deps, missing native libs, etc),
+    we fall back to noop without raising.
     """
-    from .noop import build_scope_set
-    return build_scope_set
+    try:
+        from .treesitter.producer import build_raw_scope_set
+        return build_raw_scope_set
+    except Exception:
+        return _noop()
 
 
-# Registry of available producer factories.
-# Factories must be zero-argument callables returning either:
-#   - a Producer callable
-#   - or None if unavailable
-PRODUCERS: Dict[str, Callable[[], Optional[Producer]]] = {
-    "treesitter": _treesitter,
+PRODUCERS: Dict[str, Factory] = {
     "noop": _noop,
+    # Reserved key: stable config even when optional deps are absent.
+    "treesitter": _treesitter,
 }

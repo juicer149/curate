@@ -1,18 +1,26 @@
-# curate.relations
+# curate_next.relations
 
-`curate.relations` defines **pure structural relations** over Curate facts.
+`curate_next.relations` defines **pure structural relations** over Curate facts.
 
 Relations answer questions such as:
 
 - “What is the parent of this scope?”
-- “Which scopes are nested inside this one?”
+- “Which scopes are directly nested inside this one?”
+- “Which scopes are descendants?”
 - “How deep is this scope?”
 - “Is this the root?”
 
-They operate **purely on structural addresses** and do not depend on:
+They operate **purely on structural addresses** and depend only on:
+
+- `Scope.address`
+- `ScopeSet` invariants
+
+They do NOT depend on:
+
 - syntax trees
 - source text
 - languages
+- producers
 - files or folders
 - semantic interpretation
 
@@ -20,12 +28,15 @@ They operate **purely on structural addresses** and do not depend on:
 
 ## Core idea
 
-Curate encodes hierarchy **directly** in `Scope.address`.
+Curate encodes hierarchy **directly** in `Address`.
 
-Because of this, many structural relationships can be derived
-*algebraically*, without indexes, caches, or auxiliary data structures.
+Because of this:
 
-`relations` is the layer that exposes those derivations.
+- parent/child relationships are algebraic
+- ancestor/descendant queries are prefix checks
+- no auxiliary indexes are required for correctness
+
+`relations` is the layer that exposes this algebra.
 
 ---
 
@@ -33,20 +44,21 @@ Because of this, many structural relationships can be derived
 
 Relations are:
 
-- **Pure**  
+- **Pure**
   No mutation, no side effects.
 
-- **Deterministic**  
+- **Deterministic**
   Same inputs → same outputs.
 
-- **Interpretation-free**  
+- **Interpretation-free**
   They do not classify, rank, or assign meaning.
 
-- **Index-free by design**  
-  Correctness depends only on `Scope.address` invariants.
+- **Invariant-driven**
+  Correctness relies on core invariants
+  (e.g. contiguous child indices, unique addresses).
 
 If a consumer needs faster queries for a specific workload,
-indexes can be built **outside Curate**.
+indexes may be built **outside Curate** as optimizations.
 
 ---
 
@@ -57,7 +69,6 @@ The core module exposes **explicit, typed functions**:
 ```python
 parent(scopes, scope)        -> Scope | None
 children(scopes, scope)      -> tuple[Scope, ...]
-siblings(scopes, scope)      -> tuple[Scope, ...]
 ancestors(scopes, scope)     -> tuple[Scope, ...]
 descendants(scopes, scope)   -> tuple[Scope, ...]
 is_root(scope)               -> bool
@@ -69,7 +80,7 @@ All functions operate on:
 * a `ScopeSet`
 * a single `Scope`
 
-They do not maintain state and do not require indexes.
+They do not maintain state and do not build indexes.
 
 ---
 
@@ -89,42 +100,15 @@ relation(scopes, scope, "ancestors")
 relation(scopes, scope, "children")
 ```
 
-Supported relation names can be queried via:
-
-```python
-available_relations()
-```
-
-This adapter is intentionally minimal:
-
-* no query language
-* no chaining
-* no predicates
-
-It exists purely to decouple **selection** from **implementation**.
+This adapter exists solely to decouple **selection** from **implementation**.
 
 ---
 
-## Why not a query language?
+## Non-goals
 
-Curate deliberately avoids a general query DSL here.
+`curate_next.relations` is NOT:
 
-Reasons:
-
-* relations are small and finite
-* composition is better handled by the caller
-* complexity grows faster than usefulness
-* explicit functions are easier to reason about and test
-
-If a higher layer wants a richer query system,
-it can be built **on top of this module**.
-
----
-
-## What this module is NOT
-
-`curate.relations` is **not**:
-
+* a query language
 * a search engine
 * a filtering system
 * a policy layer
@@ -137,7 +121,7 @@ It is algebra over structure — nothing more.
 
 ## Summary
 
-`relations` exists because hierarchy is already encoded.
+Because hierarchy is already encoded:
 
 > If the address tells you everything,
 > relations become simple math.

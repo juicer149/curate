@@ -1,8 +1,8 @@
-# Curate — Structural Fact Engine
+# Curate — Structural Intermediate Representation (IR)
 
-Curate extracts **structural facts** from syntax trees.
+Curate extracts **structural facts** from source code.
 
-Curate answers one question only:
+Curate answers **one question only**:
 
 > **“What structural regions exist, and how are they nested?”**
 
@@ -17,16 +17,39 @@ that higher layers can depend on without fear of semantic drift.
 
 Curate is intentionally **not**:
 
-- an interpreter (no meaning, no execution)
+- an interpreter or evaluator
+- a semantic analyzer
 - a docstring classifier
-- a query engine or policy layer
 - a formatter, linter, or type checker
+- a query engine or policy layer
 - a file, folder, or workspace manager
-- a semantic analyzer of any label
+- an editor integration
 
-Curate does **not** decide what is “important”, “documentation”, “header”, or “noise”.
+Curate does **not** decide what is:
 
-Those decisions belong strictly to **layers above** Curate.
+- “important”
+- “documentation”
+- “header”
+- “noise”
+- “context”
+
+All such decisions belong strictly to **layers above** Curate.
+
+---
+
+## Core idea: structure as geometry
+
+Curate treats source code as **geometry**, not meaning.
+
+A code file is understood as a set of **regions**:
+
+- each region spans a contiguous range of lines
+- regions may contain other regions
+- containment is **laminar**:
+  - nested or disjoint
+  - never partially overlapping
+
+From this geometry, Curate derives **structural addresses**.
 
 ---
 
@@ -34,22 +57,22 @@ Those decisions belong strictly to **layers above** Curate.
 
 Curate should be understood like a **Mario level**.
 
-- The code file is the level.
-- Structural blocks are platforms.
+- The source file is the level.
+- Structural regions are platforms.
 - Nesting is vertical movement.
-- Sibling scopes are horizontal movement.
+- Sibling regions are horizontal movement.
 
 Mario can:
 
-- run left/right across sibling structures
-- jump up and down between nested structures
-- reason about *where* he is structurally
+- move left/right across siblings
+- jump up/down between nested regions
+- reason about *where he is structurally*
 
-Mario **cannot**:
+Mario cannot:
 
-- understand the story written on a sign
+- read the story on a sign
 - interpret what an object “means”
-- care whether a decoration is important or not
+- decide whether something is important
 
 Curate plays the same role:
 
@@ -57,153 +80,149 @@ Curate plays the same role:
 
 ---
 
-## Mental model: Structural addresses (postal codes)
+## Structural addresses (postal codes)
 
-Each `Scope` is identified by a **hierarchical address**, not an identity.
+Each structural region is identified by a **hierarchical address**.
 
-An address behaves like a postal code:
-
-- The first segment identifies a very broad region
-- Each subsequent segment narrows the region
-- No segment implies ownership, meaning, or importance
-- Two scopes with similar prefixes are *near* each other structurally
-
-Example:
-
-```
-
-(0,)            # module
-(0, 1)          # second top-level region
-(0, 1, 0)       # first nested region inside it
-(0, 1, 0, 2)    # third sub-region of that region
-
-```
-
-The address does **not** describe:
-
-- semantic identity
-- execution order
-- uniqueness across files
-
-It describes **where a structural region lives**, and nothing more.
-
----
-
-## Core responsibilities
-
-Curate does **exactly three things**:
-
-1. **Select a producer via registry**
-   (string-keyed lookup, no conditionals)
-
-2. **Traverse the syntax tree**
-
-3. **Emit structural facts**
-
-Nothing more.
-
-Producer selection is performed via a registry:
-
-- Producers are identified by string keys
-- Producers are instantiated lazily
-- Missing or unavailable producers degrade explicitly to `noop`
-
----
-
-## Core files
-
-`curate_next/` (core)
-
-- `__init__.py`  
-  Minimal public surface.
-
-- `facts.py`  
-  Structural ontology.  
-  Defines *what a fact is*.
-
-- `compile.py`  
-  Compilation facade.  
-  Selects producer, emits facts.
-
-Everything else (relations, workspaces, interpretation) lives above.
-
----
-
-## Structural facts
-
-Curate emits **facts, not interpretations**.
-
-Each fact is a `Scope`.
-
-A `Scope` contains:
-
-- `label`  
-  The syntax-tree `node.type`, **verbatim**, producer-defined.
-
-- `start`, `end`  
-  **1-based inclusive** line spans.
-
-- `address`  
-  A **hierarchical structural address**: `tuple[int, ...]`
-
-No other data is stored.
-
----
-
-## Hierarchical addresses (laminar by construction)
-
-The `address` encodes structure directly.
-
-- The root scope is always:
+An address is a tuple of integers:
 
 ```
 
 (0,)
+(0, 1)
+(0, 1, 0)
+(0, 1, 0, 2)
 
 ```
 
-- Children append one element:
+Addresses behave like postal codes:
 
-```
+- each prefix identifies a broader enclosing region
+- each additional segment narrows the region
+- addresses encode **hierarchy**, not identity
+- no segment implies meaning, ownership, or importance
 
-(0,) → (0, 0) → (0, 0, 1)
+The address does **not** describe:
 
-````
+- semantic role
+- execution order
+- uniqueness across files
 
-- The parent address is always:
-
-```py
-scope.address[:-1]
-````
-
-### Consequences
-
-Because hierarchy is encoded in the address:
-
-* Parent/child/ancestor relations are **algebraic**
-* No index is required for correctness
-* Ordering is deterministic
-* Laminar structure is guaranteed by construction
-
-Higher layers may add indexes **only as optimizations**, never as sources of truth.
+It describes **where a region lives structurally**, and nothing more.
 
 ---
 
-## Determinism guarantees
+## Address algebra (invariants)
 
-For the same input:
+Addresses form a simple algebra:
 
-* The same scopes are emitted
-* In the same order
-* With the same addresses
-* With the same spans
+- **parent** = remove last segment
+- **child** = append an integer
+- **ancestors** = successive prefixes
+- **descendants** = addresses sharing a prefix
 
-This makes Curate suitable for:
+Because hierarchy is encoded algebraically:
 
-* caching
-* incremental recomputation
-* editor integration
-* AI context building
+- parent/child relations require no indexes
+- ordering is deterministic
+- laminarity is guaranteed by construction
+
+Indexes may be added by higher layers **only as optimizations**,
+never as sources of truth.
+
+---
+
+## Two layers of facts: Raw vs Derived
+
+Curate deliberately separates **observation** from **structure**.
+
+### Raw facts (`RawScope`)
+
+Raw facts are emitted by **producers**.
+
+A `RawScope` contains:
+
+- `label` — producer-defined (e.g. syntax node type)
+- `start`, `end` — source positions (`row`, optional `col`)
+- optional `meta` payload (opaque to core)
+
+Raw facts:
+
+- may overlap
+- may be malformed
+- may be incomplete
+- carry **no addresses**
+- make **no laminar guarantees**
+
+Raw facts represent **what was observed**, not what is structurally valid.
+
+---
+
+### Derived facts (`Scope`)
+
+Derived facts are produced by **core derivation**.
+
+A `Scope` contains:
+
+- `address` — hierarchical structural address
+- `label`
+- `start`, `end` — **line-based** inclusive spans
+- optional `meta` (carried through, not interpreted)
+
+Derived facts guarantee:
+
+- deterministic laminar structure
+- contiguous child indices per parent
+- valid line spans within the document
+- exactly one root scope per file
+
+Derived facts represent **structure**, not observation.
+
+---
+
+## Position handling and projection
+
+Producers may report spans using `(row, col)` precision.
+
+Core **does not reason in two dimensions**.
+
+Instead:
+
+- raw positions are **projected** to line spans:
+  - `start_line = start.row`
+  - `end_line = end.row`
+- laminarity, ordering, and containment are defined **only on lines**
+
+Column precision is preserved in metadata for higher layers
+(e.g. cursor matching), but never affects structural derivation.
+
+This projection is intentional and conservative.
+
+---
+
+## Derivation: the structural motor
+
+Core derivation:
+
+- accepts a `RawScopeSet`
+- normalizes spans to document bounds
+- enforces laminarity via a containment stack
+- assigns deterministic addresses
+- drops invalid or crossing regions consistently
+
+Derivation is:
+
+- **total** (never raises)
+- deterministic
+- policy-free
+- independent of any syntax tree
+
+Core does **not** know about:
+- files
+- folders
+- workspaces
+- editors
+- languages
 
 ---
 
@@ -213,191 +232,104 @@ This makes Curate suitable for:
 
 For any input:
 
-* any source text
-* any language key
-* any producer key
-* any runtime environment
+- any source text
+- any language key
+- any producer key
+- any runtime environment
 
-Curate guarantees that compilation:
+Curate guarantees:
 
-* **always returns a `ScopeSet`**
-* **never raises due to missing dependencies**
-* **never fails structurally**
+- compilation **always returns a `ScopeSet`**
+- a root/module scope is always present
+- missing or failing producers never break structure
 
-This is achieved by an explicit, first-class fallback producer (`noop`).
-
-Even in the complete absence of syntax-tree support, Curate still emits:
-
-* a single, well-defined module/root scope
-* covering the entire source text
-
-This guarantee is architectural, not incidental.
-
-Higher layers may therefore depend on Curate without defensive checks.
-
----
-
-## Strings and docstrings (important)
-
-Curate **does not classify docstrings**.
-
-Instead:
-
-* All emitted scopes are derived **solely from syntax-tree structure**
-* A scope exists *only if the syntax tree describes a structural region*
-
-### Why only certain strings appear
-
-In Python, Tree-sitter represents **docstrings** as:
-
-```
-block
-└─ expression_statement
-   └─ string
-```
-
-This pattern is **structural**, not semantic:
-
-* It occupies space
-* It forms its own region
-* It is not part of an executable expression
-
-Inline strings such as:
-
-* assignment values
-* call arguments
-* return values
-
-are nested inside **executable expressions** (`assignment`, `call`, `return_statement`)
-and do **not** form independent structural regions.
-
-Curate therefore:
-
-* emits strings that form **standalone structural blocks**
-* ignores strings that are merely **expression operands**
-
-This is **not interpretation**.
-
-It is a direct consequence of following the syntax tree *as structure*.
-
----
-
-### Semantic difference (but not Curate’s concern)
-
-* A docstring block cannot be executed as an expression
-  (except via special mechanisms like `doctest`)
-* An inline string literal is always part of execution
-
-Curate records this **structural distinction only**.
-
-Whether a string is “documentation”, “header”, or “noise” is decided **later**.
+This is achieved via a first-class fallback producer: **`noop`**.
 
 ---
 
 ## Producers
 
-Curate supports multiple syntax-tree **producers** via a small plugin surface.
+Producers are responsible for **emitting raw structural facts**.
 
 A producer must:
 
-* accept `source: str` and `language: str`
-* emit a `ScopeSet`
-* guarantee determinism and laminar structure
-* derive facts **only from syntax-tree structure**
-* never raise on parse failure
-  (fallback to at least a module/root scope)
+- accept `source: str` and `language: str`
+- emit a `RawScopeSet`
+- never assign addresses
+- never enforce laminar policy
+- never raise on failure
 
-### No-op producer (structural fallback)
+### No-op producer (structural baseline)
 
 Curate includes a built-in `noop` producer.
 
 The noop producer:
 
-* requires no external dependencies
-* never inspects syntax
-* emits exactly one scope:
+- requires no dependencies
+- does not inspect syntax
+- emits exactly one raw scope:
+  - label: `"module"`
+  - span: entire file
 
-  * the module/root scope
-  * spanning the entire source
+This is **not an error case**.
 
-This producer is not an error case.
-
-It is a first-class structural baseline that guarantees Curate’s totality
-and enables safe use in editors, tests, and constrained environments.
-
-### Tree-sitter
-
-Tree-sitter is the primary producer because it provides:
-
-* consistent syntax trees
-* broad language support
-* a unified structural model
-
-Language-specific configuration lives under:
-
-```
-curate_next/producers/
-```
-
-Rules describe **what counts as a structural region**, not what it means.
+It is a structural baseline that guarantees Curate’s totality
+and allows safe use in editors, tests, and constrained environments.
 
 ---
 
-## Why this responsibility boundary exists
+## Determinism guarantees
+
+For the same input:
+
+- the same scopes are derived
+- in the same order
+- with the same addresses
+- with the same line spans
+
+This makes Curate suitable for:
+
+- caching
+- incremental recomputation
+- editor integration
+- AI context selection
+
+---
+
+## Workspace and multi-file structure
+
+Curate core operates on **single files only**.
+
+Multi-file and workspace structure is handled by a **separate layer**.
+
+The workspace layer:
+
+- assigns addresses to folders and files
+- treats files as parents of module scopes
+- prefixes file-level addresses onto core-derived addresses
+
+No changes to core or address algebra are required.
+
+Workspace is a **larger coordinate space**, not a new model.
+
+---
+
+## Why this boundary exists
 
 Curate stops **exactly** at structure because:
 
-* Structure is stable
-* Semantics are subjective
-* Policies change
-* Use-cases differ (editor, AI, refactoring, folding, navigation)
+- structure is stable
+- semantics are subjective
+- policies change
+- use cases differ (editors, AI, navigation, folding)
 
 By freezing structure at the lowest possible level:
 
-* Higher layers can evolve independently
-* No semantic decision becomes irreversible
-* The IR remains valid across contexts
+- higher layers can evolve independently
+- no semantic decision becomes irreversible
+- the IR remains valid across contexts
 
 Curate is therefore a **foundation**, not a feature.
-
----
-
-## REPL example
-
-```py
->>> from curate_next import compile_scope_set
->>>
->>> src = """
-... \"\"\"
-... Module documentation
-... \"\"\"
-...
-... class Foo:
-...     \"\"\"
-...     Class docstring
-...     \"\"\"
-...     def bar(self):
-...         \"\"\"
-...         Function docstring
-...         \"\"\"
-...         return "inline string"
-... """
->>>
->>> scopes = compile_scope_set(source=src, language="python")
->>> for s in scopes:
-...     print(s.address, s.label, s.start, s.end)
-```
-
-Output shows:
-
-* module
-* class block
-* function block
-* docstring strings
-
-But **not** inline expression strings.
-
-This is intentional.
 
 ---
 
@@ -405,12 +337,12 @@ This is intentional.
 
 Curate:
 
-* records **where structure exists**
-* encodes hierarchy **directly**
-* emits **facts only**
-* never interprets meaning
+- records **where structure exists**
+- encodes hierarchy **algebraically**
+- emits **facts only**
+- never interprets meaning
 
 Like Mario:
 
-> Curate builds the level.
+> Curate builds the level.  
 > Others decide how to play it.

@@ -6,41 +6,73 @@ A *producer* is a pure function that converts:
 
 ```
 
-(source text, language key) → ScopeSet
+(source: str, language: str) → RawScopeSet
 
 ```
 
-Producers are **implementation details**.  
-Curate core does not interpret, validate, or reason about their output.
+Producers emit **raw structural observations**.
+They do **not** derive structure, hierarchy, or addresses.
+
+Producers are **implementation details**.
+Curate core treats all producers as **opaque sources of raw facts**.
 
 ---
 
-## Core contract
+## Core contract (important)
 
-Every producer MUST obey the following contract:
+Every producer MUST obey the following contract.
 
 ### Function signature
 
 ```python
-def build_scope_set(*, source: str, language: str) -> ScopeSet
+def build_raw_scope_set(*, source: str, language: str) -> RawScopeSet
 ```
 
 ### Guarantees
 
 A producer MUST:
 
-* Always return a `ScopeSet`
-* Always include a **root scope**:
-
-  * `address == (0,)`
-  * `start == 1`
-  * `end >= 1`
+* Always return a `RawScopeSet`
+* Never raise uncaught exceptions to the caller
+* Never assign structural addresses
+* Never enforce laminarity
+* Never depend on global or workspace state
 * Never mutate input
-* Never rely on global state
-* Never raise uncaught exceptions to callers
 
-If a producer cannot operate (missing dependency, parse failure, unknown
-language, internal error), it must **degrade structurally**, not fail.
+If a producer cannot operate (missing dependency, parse failure,
+unknown language, internal error), it MUST **degrade structurally**,
+not fail.
+
+Structural degradation means:
+
+> Return the smallest valid set of raw structural facts.
+
+---
+
+## Raw facts, not structure
+
+Producers emit **raw facts** (`RawScope`), not derived structure.
+
+A `RawScope` contains:
+
+* `label` — producer-defined (e.g. syntax node type)
+* `start`, `end` — source positions (`row`, optional `col`)
+* optional `meta` — opaque payload for higher layers
+
+Raw facts:
+
+* may overlap
+* may be incomplete
+* may be malformed
+* carry **no addresses**
+* make **no laminar guarantees**
+
+Curate core is responsible for:
+
+* enforcing laminarity
+* assigning addresses
+* normalizing spans
+* deriving structure
 
 ---
 
@@ -50,16 +82,17 @@ Producers:
 
 * MAY use syntax trees (e.g. Tree-sitter)
 * MAY load grammars, rules, or schemas
-* MAY drop nodes based on structural rules
+* MAY drop nodes based on **structural rules**
 
 Producers MUST NOT:
 
 * Assign semantic meaning
 * Infer intent
 * Apply editor or UX policy
-* Depend on files, paths, projects, or workspaces
+* Decide importance
+* Reason about files, folders, or workspaces
 
-Curate treats all producers as **black boxes that emit structure**.
+Curate treats producers as **mechanical extractors of structure**.
 
 ---
 
@@ -76,12 +109,17 @@ Example keys:
 * `"treesitter"`
 * `"noop"`
 
-Selection happens in `compile_scope_set`.
-No producer should contain dispatch logic.
+Selection happens exclusively in `compile_scope_set`.
+
+No producer should contain:
+
+* dispatch logic
+* fallback logic
+* environment detection
 
 ---
 
-## Fallback behavior
+## Fallback behavior (noop)
 
 Curate defines a mandatory fallback producer:
 
@@ -89,14 +127,18 @@ Curate defines a mandatory fallback producer:
 
 The `noop` producer:
 
-* Ignores language
-* Emits exactly one scope:
+* requires no external dependencies
+* ignores language
+* emits exactly one raw scope:
 
-  * module-level
-  * covering the entire source
+  * `label = "module"`
+  * `start = Position(1)`
+  * `end = Position(total_lines)`
 
-This guarantees that **Curate is total**:
-there is always a structural result.
+This is **not an error case**.
+
+It is a first-class structural baseline that guarantees Curate’s
+**totality**.
 
 Any failure in other producers must degrade to this behavior.
 
@@ -108,22 +150,22 @@ To add a new producer:
 
 1. Create a module:
 
-```text
+```
 curate_next/producers/my_producer/
 ```
 
 2. Implement:
 
 ```python
-def build_scope_set(*, source: str, language: str) -> ScopeSet
+def build_raw_scope_set(*, source: str, language: str) -> RawScopeSet
 ```
 
 3. Register it lazily in `producers/registry.py`:
 
 ```python
 def _my_producer():
-    from .my_producer import build_scope_set
-    return build_scope_set
+    from .my_producer import build_raw_scope_set
+    return build_raw_scope_set
 
 PRODUCERS["my_producer"] = _my_producer
 ```
@@ -137,7 +179,6 @@ If the registry entry exists, the producer is usable.
 ## Design philosophy
 
 > If structure exists, it should be representable.
->
 > If structure cannot be derived, return the smallest valid structure.
 
 Producers are **mechanical**, **replaceable**, and **boring by design**.

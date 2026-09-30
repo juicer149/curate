@@ -3,8 +3,10 @@
 Binds:
 - language key
 - grammar loader
-- structural rules (loaded from .lang.json)
+- structural rules (loaded from *.lang.json)
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path

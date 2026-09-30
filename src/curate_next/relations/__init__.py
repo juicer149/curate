@@ -1,24 +1,12 @@
 """
-curate.relations — algebraic relations over structural facts.
+curate_next.relations — algebraic relations over structural facts.
 
-This package exposes structural relations derived purely from Scope.address.
-
-It provides:
-- core: explicit typed relation functions
-- dispatch: optional string-based adapter for dynamic selection (UI/CLI/LSP)
-
-Relations are:
-- deterministic
-- interpretation-free
-- independent of syntax trees, languages, and files
-
-No indexes are required for correctness.
+Relations are derived purely from Address algebra and ScopeSet invariants.
 """
 
 from .core import (
     parent,
     children,
-    siblings,
     ancestors,
     descendants,
     is_root,
@@ -32,15 +20,14 @@ from .dispatch import (
 )
 
 __all__ = [
-    # core
+    # core relations
     "parent",
     "children",
-    "siblings",
     "ancestors",
     "descendants",
     "is_root",
     "depth",
-    # dispatch adapter
+    # dispatch
     "relation",
     "available_relations",
     "RELATIONS",

@@ -2,11 +2,26 @@
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+# ============================================================
+# Project metadata
+# ============================================================
+
 [project]
-name = "curate-next"
-version = "0.2.0"
+name = "curate"
+version = "0.3.0"
+description = "Curate — structural intermediate representation for source code"
 requires-python = ">=3.10"
 dependencies = []
+
+# Optional but recommended
+authors = [
+  { name = "Albin" }
+]
+readme = "README.md"
+
+# ============================================================
+# Packaging (src-layout)
+# ============================================================
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -15,23 +30,31 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 # ============================================================
-# Pytest + coverage
+# Pytest configuration
 # ============================================================
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-testpaths = ["src/curate_next/tests"]
+testpaths = ["tests"]
 pythonpath = ["src"]
 
+markers = [
+  "treesitter: tests that require tree-sitter and language bindings",
+]
+
 addopts = [
-  "--cov=curate_next",
+  "--cov=curate",
   "--cov-report=term-missing",
   "--cov-report=html",
 ]
 
+# ============================================================
+# Coverage configuration
+# ============================================================
+
 [tool.coverage.run]
 branch = true
-source = ["curate_next"]
+source = ["curate"]
 
 [tool.coverage.report]
 show_missing = true
@@ -42,10 +65,12 @@ skip_covered = false
 # ============================================================
 
 [project.optional-dependencies]
+
 dev = [
   "pytest",
   "pytest-cov",
   "pytest-benchmark",
+  "ptpython",
 ]
 
 treesitter = [

@@ -1,90 +1,53 @@
-.PHONY: test-lua
-test-lua:
-	~/.luarocks/bin/busted tests/lua --pattern=_spec.lua -v
+# ============================================================
+# Curate — minimal developer Makefile
+# ============================================================
 
-.PHONY: test-lua-client
-test-lua-client:
-	lua tests/lua/curate/client_harness.lua
+.PHONY: help venv install test clean
 
-.PHONY: test-all
-test-all:
-	pytest -q
-	~/.luarocks/bin/busted tests/lua --pattern=_spec.lua -v
-	lua tests/lua/curate/client_harness.lua
-# Virtual environment
 VENV := .venv
 PYTHON := $(VENV)/bin/python
 PIP := $(VENV)/bin/pip
 PYTEST := $(VENV)/bin/pytest
 
-# Allow passing extra args after target name, e.g.:
-#   make loc codex dsl
-# Captures non-target words into ARGS.
-ARGS := $(filter-out $@,$(MAKECMDGOALS))
-
-# Default target
 .DEFAULT_GOAL := help
 
 help:
-	@echo "Available commands:"
-	@echo "  make venv          Create virtual environment and install deps"
-	@echo "  make install       Install project in editable mode (dev + bench extras)"
-	@echo "  make install-core  Install project in editable mode (core only)"
-	@echo "  make test          Run test suite with pytest"
-	@echo "  make lint          Run ruff linter"
-	@echo "  make format        Auto-format code with black"
-	@echo "  make typecheck     Run mypy type checks"
-	@echo "  make bench         Run benchmark (pass args via ARGS='...')"
-	@echo "  make clean         Remove caches, coverage data, and build artifacts"
+	@echo ""
+	@echo "Curate — developer commands"
+	@echo ""
+	@echo "  make venv      Create virtual environment"
+	@echo "  make install   Install project in editable mode (dev extras)"
+	@echo "  make test      Run pytest suite"
+	@echo "  make clean     Remove caches and build artifacts"
+	@echo ""
+
+# ------------------------------------------------------------
+# Environment
+# ------------------------------------------------------------
 
 venv:
-	python -m venv $(VENV)
+	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip setuptools wheel
 
 install: venv
-	$(PIP) install -e ".[dev,bench]"
+	$(PIP) install -e ".[dev]"
 
-# Optional: core-only install (no algorithm deps)
-install-core: venv
-	@echo "  make bench         Run benchmark (pass args via ARGS='...')"
-	@echo "  make loc           Count LOC for folders. Usage:"
-	@echo "                     make loc curate tests"
-	@echo "                     or: make loc DIRS=\"curate tests\""
+# ------------------------------------------------------------
+# Testing
+# ------------------------------------------------------------
+
 test:
-	pytest -q
+	$(PYTEST)
 
-lint:
-	$(VENV)/bin/ruff check src tests_new
+# ------------------------------------------------------------
+# Cleanup
+# ------------------------------------------------------------
 
-format:
-	$(VENV)/bin/black src tests_new
-
-typecheck:
-	$(VENV)/bin/mypy src
-
-BENCH_WARMUP ?= 3000
-BENCH_ITERS  ?= 30000
-BENCH_RUNS   ?= 7 
-bench:
-	BENCH_WARMUP=$(BENCH_WARMUP) BENCH_ITERS=$(BENCH_ITERS) BENCH_RUNS=$(BENCH_RUNS) \
-	python3 scripts/benchmark_codex_vs_raw.py
-
-LOC_DIRS ?=
-loc:
-	python3 scripts/loc.py $(if $(LOC_DIRS),$(LOC_DIRS),$(ARGS))
-
-# Swallow extra words (like folder names) so Make doesn't error on them
-%:
-	@:
-
-# Clean caches, coverage data, and build artifacts
 clean:
 	find . -type f -name '*.pyc' -delete
 	find . -type d -name '__pycache__' -exec rm -rf {} +
 	find . -type d -name '.pytest_cache' -exec rm -rf {} +
-	find . -type d -name '.mypy_cache' -exec rm -rf {} +
-	find . -type d -name '.ruff_cache' -exec rm -rf {} +
-	find . -type f -name '.coverage' -delete
+	find . -type d -name '.coverage' -exec rm -rf {} +
 	find . -type d -name 'htmlcov' -exec rm -rf {} +
 	find . -type d -name 'build' -exec rm -rf {} +
 	find . -type d -name 'dist' -exec rm -rf {} +

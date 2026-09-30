@@ -1,28 +1,32 @@
 """
-Curate — Structural Fact Engine.
+curate_next — INTERNAL structural IR implementation.
 
-Curate extracts deterministic, laminar structural facts from syntax trees.
+INTERNAL PACKAGE — NOT A STABLE API
 
-Public surface (core):
-- Scope, ScopeSet       — structural facts
-- compile_scope_set     — compilation facade
-- relations             — algebraic structural relations over facts
+This package contains the current implementation of Curate's
+structural intermediate representation.
 
-Curate intentionally exposes:
-- no semantic interpretation
-- no policy or filtering
-- no query engine
-- no file / project / workspace awareness
+External consumers MUST NOT import from `curate_next`.
+Use the `curate` package instead.
 
-Curate is designed to act as a stable structural IR
-for higher layers that apply meaning and navigation.
+This module exists to:
+- support internal development
+- allow iterative refactoring
+- enable a future rename to `curate_core`
+
+No stability guarantees are provided here.
 """
 
-from .facts import Scope, ScopeSet
+from .address import Address
+from .facts import Position, RawScope, RawScopeSet, Scope, ScopeSet
 from .compile import compile_scope_set
 from . import relations
 
 __all__ = [
+    "Address",
+    "Position",
+    "RawScope",
+    "RawScopeSet",
     "Scope",
     "ScopeSet",
     "compile_scope_set",

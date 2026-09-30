@@ -1,106 +1,181 @@
-"""curate.facts — structural ontology (facts only)
+"""
+curate_next.facts — raw facts and derived facts
 
-This module defines Curate’s entire data model.
+We deliberately separate two levels:
 
-Rules:
-- immutable
-- no I/O
-- no interpretation
-- no queries
+RawScope (producer output)
+--------------------------
+A producer reports only:
+- label
+- start/end Position (row + optional col)
+- optional meta payload
 
-Facts describe *where structure exists*, not what it means.
+No laminarity guarantees. No address. No root requirement.
+
+Scope (core output)
+-------------------
+Core derives:
+- deterministic laminar structure (LINE-based)
+- Address assignment (0..k-1 per parent, no gaps)
+- always a root "module" scope at Address.root()
+
+Important
+---------
+Core's laminar policy is line-based by design.
+Column precision and other payload may be carried via meta for higher layers,
+but core does not interpret it.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Tuple, Iterable, Union, TypeAlias
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, Iterator, Mapping, Tuple
+
+from .address import Address
 
 
-# ---------------------------------------------------------------------------
-# Type aliases
-# ---------------------------------------------------------------------------
-
-ScopeAddress: TypeAlias = Tuple[int, ...]
+# -----------------------------
+# Raw layer
+# -----------------------------
 
 
-# ---------------------------------------------------------------------------
-# Core facts
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class Position:
+    """
+    Source position.
+
+    - row is inclusive, 1-based
+    - col is optional and producer-defined (core does not interpret it)
+    """
+
+    row: int
+    col: int | None = None
+
+    def with_row(self, row: int) -> "Position":
+        return Position(row=int(row), col=self.col)
+
+
+@dataclass(frozen=True, slots=True)
+class RawScope:
+    """
+    Producer output fact.
+
+    Producers MUST NOT assign addresses or depend on core laminar policy.
+    """
+
+    label: str
+    start: Position
+    end: Position
+    meta: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def start_line(self) -> int:
+        return int(self.start.row)
+
+    @property
+    def end_line(self) -> int:
+        return int(self.end.row)
+
+
+class RawScopeSet:
+    """Immutable collection of RawScope."""
+
+    def __init__(self, scopes: Iterable[RawScope]):
+        self._items = tuple(scopes)
+
+    def __iter__(self) -> Iterator[RawScope]:
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __getitem__(self, i: int) -> RawScope:
+        return self._items[i]
+
+    def items(self) -> Tuple[RawScope, ...]:
+        return self._items
+
+
+# -----------------------------
+# Derived layer
+# -----------------------------
+
 
 @dataclass(frozen=True, slots=True)
 class Scope:
     """
-    Atomic structural fact.
+    Derived laminar scope (room), line-based.
 
-    A Scope represents a contiguous structural region in source text.
-
-    Fields:
-        address:
-            Hierarchical structural address (postal-code style).
-
-            Each element refines the region:
-            - earlier elements describe broader structural areas
-            - later elements narrow the region
-            - the full address identifies the smallest structural unit
-              represented by this scope
-
-            The parent address is always:
-                address[:-1]
-
-            An address is not an identity and carries no semantic meaning.
-            It is meaningful only within its structural context.
-
-        label:
-            Syntax node type, producer-defined and verbatim
-            (e.g. Tree-sitter node.type).
-
-        start, end:
-            1-based inclusive line span.
-
-    Invariants:
-        - address is non-empty
-        - start <= end
+    Invariants guaranteed by derive:
+    - address is unique
+    - addresses are contiguous per parent (0..k-1, no gaps)
+    - start/end are valid inclusive 1-based LINE spans within document bounds
+    - siblings do not overlap by LINE geometry (laminar)
     """
 
-    address: ScopeAddress
+    address: Address
     label: str
     start: int
     end: int
-
-    def contains(self, line: int) -> bool:
-        """Return True if the given line is within this scope."""
-        return self.start <= line <= self.end
+    meta: Mapping[str, Any] = field(default_factory=dict)
 
     @property
-    def parent_address(self) -> ScopeAddress | None:
-        """Return the parent structural address, or None if this is root."""
-        return self.address[:-1] if len(self.address) > 1 else None
+    def parent_address(self) -> Address | None:
+        return self.address.parent
 
 
-@dataclass(frozen=True, slots=True)
 class ScopeSet:
     """
-    Immutable collection of Scope facts.
+    Derived region of scopes.
 
-    Guarantees:
-    - deterministic ordering
-    - laminar structure
-    - no semantic meaning
-
-    ScopeSet deliberately exposes no query logic.
-    Structural relations are derived algebraically from Scope.address.
+    Ordering is deterministic by geometry, not producer order:
+        (start asc, end desc, label asc, address)
     """
 
-    scopes: Tuple[Scope, ...]
+    def __init__(self, scopes: Iterable[Scope]):
+        items = tuple(scopes)
+        items = tuple(sorted(items, key=lambda s: (s.start, -s.end, s.label, s.address.parts)))
 
-    def __iter__(self) -> Iterable[Scope]:
-        return iter(self.scopes)
+        index: Dict[Tuple[int, ...], Scope] = {}
+        for s in items:
+            # Core should guarantee uniqueness; we keep this total:
+            # "first wins" deterministically because items is sorted.
+            index.setdefault(s.address.parts, s)
+
+        self._items = items
+        self._index = index
+
+    def __iter__(self) -> Iterator[Scope]:
+        return iter(self._items)
 
     def __len__(self) -> int:
-        return len(self.scopes)
+        return len(self._items)
 
-    def __getitem__(self, item: Union[int, slice]) -> Union[Scope, "ScopeSet"]:
-        if isinstance(item, slice):
-            return ScopeSet(self.scopes[item])
-        return self.scopes[item]
+    def __getitem__(self, i: int) -> Scope:
+        return self._items[i]
+
+    def by_address(self, addr: Address) -> Scope | None:
+        return self._index.get(addr.parts)
+
+    def has_child0(self, addr: Address) -> bool:
+        """Fast 'has any children' check, valid because core assigns contiguous children."""
+        return (addr + 0).parts in self._index
+
+    def children_addresses(self, addr: Address) -> Tuple[Address, ...]:
+        """
+        Enumerate child addresses (0..k-1) until first miss.
+
+        Safe because core assigns children contiguously with no gaps.
+        """
+        out = []
+        i = 0
+        while True:
+            child = addr + i
+            if child.parts not in self._index:
+                break
+            out.append(child)
+            i += 1
+        return tuple(out)
+
+    def index(self) -> Mapping[Tuple[int, ...], Scope]:
+        return self._index

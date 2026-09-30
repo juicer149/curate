@@ -1,10 +1,7 @@
 """
-curate.producers.treesitter — Tree-sitter backend
-
-Exports:
-- build_scope_set(source, language) -> ScopeSet
+curate_next.producers.treesitter — Tree-sitter raw producer
 """
 
-from .producer import build_scope_set
+from .producer import build_raw_scope_set
 
-__all__ = ["build_scope_set"]
+__all__ = ["build_raw_scope_set"]

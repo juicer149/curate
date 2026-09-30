@@ -1,156 +1,90 @@
-"""curate.relations.core — algebraic relations over Scope facts.
+"""
+curate_next.relations.core — algebraic relations over derived ScopeSet
 
-This module defines structural relations derived solely from Scope.address.
+Relations are derived purely from Address algebra and ScopeSet invariants.
 
-Important properties:
-- no interpretation
-- no semantic classification
-- no indexes or caches
-- correctness depends only on Scope.address invariants
-
-All relations are derived algebraically from hierarchical addresses.
+No interpretation.
+No indexes beyond ScopeSet.by_address().
 """
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Tuple, List
 
-from ..facts import Scope, ScopeAddress, ScopeSet
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-def _is_parent(parent_address: ScopeAddress, child_address: ScopeAddress) -> bool:
-    """
-    Return True if parent_address is the immediate parent of child_address.
-
-    parent_address == child_address[:-1]
-    """
-    return (
-        len(child_address) == len(parent_address) + 1
-        and child_address[:-1] == parent_address
-    )
-
-
-def _is_ancestor(
-    ancestor_address: ScopeAddress,
-    descendant_address: ScopeAddress,
-) -> bool:
-    """
-    Return True if ancestor_address is a (non-equal) ancestor of descendant_address.
-    """
-    return (
-        len(descendant_address) > len(ancestor_address)
-        and descendant_address[: len(ancestor_address)] == ancestor_address
-    )
+from ..facts import Scope, ScopeSet
+from ..address import Address
 
 
 # ---------------------------------------------------------------------------
-# Public relations API
+# Core relations
 # ---------------------------------------------------------------------------
 
 def parent(scopes: ScopeSet, scope: Scope) -> Scope | None:
-    """
-    Return the immediate parent of `scope`, or None if it is root.
-
-    Invariants:
-    - At most one parent exists
-    - Root scope has no parent
-    """
-    parent_addr = scope.parent_address
-    if parent_addr is None:
+    """Return the immediate parent of `scope`, or None if it is root."""
+    addr = scope.parent_address
+    if addr is None:
         return None
-
-    for s in scopes:
-        if s.address == parent_addr:
-            return s
-    return None
+    return scopes.by_address(addr)
 
 
 def children(scopes: ScopeSet, scope: Scope) -> Tuple[Scope, ...]:
     """
     Return direct children of `scope`.
 
-    Children are scopes whose address is exactly one level deeper
-    and share the same prefix.
-
-    Ordering is deterministic according to ScopeSet ordering.
+    Relies on the invariant that children are assigned contiguously
+    as (address + 0), (address + 1), ..., with no gaps.
     """
-    return tuple(
-        s for s in scopes
-        if _is_parent(scope.address, s.address)
-    )
-
-
-def siblings(scopes: ScopeSet, scope: Scope) -> Tuple[Scope, ...]:
-    """
-    Return siblings of `scope` (same parent), excluding `scope`.
-
-    Root scope has no siblings.
-    """
-    parent_addr = scope.parent_address
-    if parent_addr is None:
-        return ()
-
-    return tuple(
-        s for s in scopes
-        if s.address != scope.address and s.parent_address == parent_addr
-    )
+    out: List[Scope] = []
+    i = 0
+    while True:
+        child_addr = scope.address + i
+        child = scopes.by_address(child_addr)
+        if child is None:
+            break
+        out.append(child)
+        i += 1
+    return tuple(out)
 
 
 def ancestors(scopes: ScopeSet, scope: Scope) -> Tuple[Scope, ...]:
     """
     Return all ancestors of `scope`, ordered from nearest parent to root.
-
-    Example:
-        scope.address = (0, 1, 2, 3)
-
-        ancestors = [
-            (0, 1, 2),
-            (0, 1),
-            (0,)
-        ]
     """
-    out: list[Scope] = []
+    out: List[Scope] = []
     cur = scope
-
     while True:
         p = parent(scopes, cur)
         if p is None:
-            return tuple(out)
+            break
         out.append(p)
         cur = p
+    return tuple(out)
 
 
 def descendants(scopes: ScopeSet, scope: Scope) -> Tuple[Scope, ...]:
     """
-    Return all descendants of `scope` (depth-first, deterministic).
+    Return all descendants of `scope`, in deterministic order.
 
-    A descendant is any scope whose address starts with scope.address
-    and is strictly longer.
+    A descendant is any scope whose address has `scope.address` as a prefix
+    and is strictly deeper.
     """
-    base = scope.address
+    base = scope.address.parts
+    n = len(base)
     return tuple(
         s for s in scopes
-        if _is_ancestor(base, s.address)
+        if len(s.address.parts) > n and s.address.parts[:n] == base
     )
 
 
 # ---------------------------------------------------------------------------
-# Convenience predicates (still structural)
+# Convenience predicates
 # ---------------------------------------------------------------------------
 
 def is_root(scope: Scope) -> bool:
     """Return True if scope is the root scope."""
-    return len(scope.address) == 1
+    return scope.address.is_root
 
 
 def depth(scope: Scope) -> int:
-    """
-    Return structural depth of the scope.
-
-    Root depth == 0.
-    """
-    return len(scope.address) - 1
+    """Return structural depth of the scope (root == 0)."""
+    return scope.address.depth()

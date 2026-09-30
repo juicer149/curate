@@ -1,8 +1,8 @@
-"""
-curate.producers — producer backends (core)
+"""curate_next.producers — producer surface"""
 
-A producer converts:
-    (source text, language key) -> ScopeSet
+from .registry import PRODUCERS, Producer
 
-Curate core treats producers as implementation details.
-"""
+__all__ = [
+    "PRODUCERS",
+    "Producer",
+]
