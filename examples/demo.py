@@ -1,4 +1,5 @@
-# examples/demo.py
+# examples/demo.py — the core on hand-made facts (no tree-sitter needed).
+# Run: .venv/bin/python examples/demo.py
 from __future__ import annotations
 
 from curate import RawFact, Span, compile_scopes

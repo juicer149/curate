@@ -7,11 +7,14 @@ then let tools ask "where am I?" and act on the answer.
 
 The first consumer is Neovim folding. Put the cursor anywhere, press a key,
 and the enclosing scope folds. Press again and the next scope out folds.
+Or fold the whole file down to its outline: function and class lines in
+Python, every heading in Markdown.
 
 ```
 source ──► producer ──► RawFact(label, span) ──► curate() ──► ScopeSet ──► consumer
            tree-sitter                           laminar,      addresses,     nvim folds,
-                                                 O(n log n)    at / chain     (later: RAG)
+                                                 O(n log n)    at / chain,    (later: RAG)
+                                                               outline
 ```
 
 - **Producers** know a language. They emit raw facts: a label and a line span.
@@ -142,9 +145,12 @@ Parsing dominates. Process start-up adds about 40 ms per call from the editor.
 ## Status
 
 - Languages: Python, Markdown.
-- Next: fold text and appearance, more languages, a visibility plan that
-  decides what to show rather than what to hide, and scope-aware retrieval
-  for RAG.
+- Neovim: zoom folding, outline, fold text.
+- Next: more languages (HTML, CSS, JavaScript, JSON, YAML), a docstring or
+  first-paragraph summary in the fold text, a visibility plan that decides
+  what to show rather than what to hide, and scope-aware retrieval for RAG.
+
+`examples/demo.py` shows the core on hand-made facts, without tree-sitter.
 
 See [docs/DESIGN.md](docs/DESIGN.md) for how the core works,
 [docs/VISION.md](docs/VISION.md) for the longer picture and

@@ -21,3 +21,22 @@ def test_compile_scopes_handles_producer_error_and_emits_degenerate_root() -> No
     root = ss.scopes[0]
     assert root.label == "root"
     assert root.span.start == 1 and root.span.end == 1
+
+
+def test_noop_producer_gives_only_the_root() -> None:
+    ss = compile_scopes(source="def f():\n    pass\n", language="python", producer="noop")
+    assert [s.label for s in ss.scopes] == ["root"]
+
+
+def test_unknown_producer_falls_back_to_noop() -> None:
+    ss = compile_scopes(source="x\n", language="python", producer="no-such-producer")
+    assert [s.label for s in ss.scopes] == ["root"]
+
+
+def test_register_rejects_an_empty_name() -> None:
+    import pytest
+
+    from curate.producers.registry import register
+
+    with pytest.raises(ValueError):
+        register("", lambda: None)

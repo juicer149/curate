@@ -155,21 +155,25 @@ The client never:
 
 ## Version Roadmap
 
-### v1 — Python, tree-sitter, zoom folding (current)
+### v1 — tree-sitter, zoom folding, outline (current)
 
 **Done**
 
 - tree-sitter producer, one file per language (Python, Markdown)
 - language-free core: laminar selection and addresses in O(n log n)
 - `at` / `chain` queries and the `curate chain` CLI
-- Neovim plugin: fold outward scope by scope, unfold inward
+- `curate outline`: the file's skeleton, with each language deciding which
+  scopes show (first step of a visibility plan)
+- Neovim plugin: fold outward scope by scope, unfold inward, fold to the
+  outline; fold text shows the line with its own highlighting and a count
 
 **Next**
 
-- fold text and appearance
 - more languages: one file each in `producers/treesitter/languages/`
+  (HTML, CSS, JavaScript, JSON, YAML)
+- a summary in the fold text: a function's docstring, a section's first
+  sentence; the same "name + one line" a RAG context needs
 - a visibility plan: decide what to show, not only what to hide
-  (first step done: `curate outline`, the file's skeleton)
 
 ---
 
