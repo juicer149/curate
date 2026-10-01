@@ -1,5 +1,7 @@
 # curate
 
+[![test](https://github.com/juicer149/curate/actions/workflows/test.yml/badge.svg)](https://github.com/juicer149/curate/actions/workflows/test.yml)
+
 Structural view of source code: turn a file into a tree of nested scopes,
 then let tools ask "where am I?" and act on the answer.
 
