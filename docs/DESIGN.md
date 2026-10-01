@@ -348,8 +348,10 @@ so compilation itself is total.
 
 Included:
 
-* `treesitter` — a `LanguageSpec` maps node types to scope labels
-  (Python first); tree-sitter is imported lazily
+* `treesitter` — one file per language under `languages/`, each with a
+  `LanguageSpec` mapping node types to scope labels (Python, Markdown);
+  a language may add its own labelling rule, as Markdown does for
+  heading levels; tree-sitter is imported lazily
 * `noop` — emits no facts; the guaranteed fallback
 
 Other producers (regex scanners, AST adapters, domain extractors)

@@ -44,8 +44,34 @@ curate chain tests/fixtures/python_minimal.py --line 16
 ]}
 ```
 
-Lines are 1-based and inclusive. `FILE` may be `-` for stdin. Exit code 1 with a message on
-stderr when the producer fails.
+Lines are 1-based and inclusive. The language comes from the file suffix
+(`.py`, `.md`) unless `--language` is given; `FILE` may be `-` for stdin, which
+needs `--language`. Exit code 1 when the producer fails, 2 when the language
+cannot be told; both with a message on stderr.
+
+## Languages
+
+| Language | Names            | Suffixes            | Scopes                                   |
+|----------|------------------|---------------------|------------------------------------------|
+| Python   | `python`, `py`   | `.py`, `.pyi`       | classes, functions, compound statements |
+| Markdown | `markdown`, `md` | `.md`, `.markdown`  | sections, labelled `h1`–`h6`             |
+
+Each language is one file in
+[`src/curate/producers/treesitter/languages/`](src/curate/producers/treesitter/languages/).
+To add one, create `<name>.py` there with:
+
+```python
+NAMES = ("rust", "rs")          # first is the canonical name
+EXTENSIONS = (".rs",)
+SPEC = LanguageSpec(
+    scopes={"function_item": "function", "impl_item": "impl"},
+    load=_load,                 # returns the tree_sitter.Language
+)
+```
+
+Nothing else is registered; the file name is the lookup. Add the grammar
+package to the `treesitter` extra and the filetype to the Neovim plugin's
+`languages`.
 
 ## Neovim
 
@@ -73,7 +99,7 @@ Options:
 ```lua
 require("curate_view").setup({
   cmd = { "curate" },          -- command prefix
-  languages = { "python" },
+  languages = { python = "python", markdown = "markdown" },  -- filetype -> language
   keymaps = false,             -- or a table overriding the defaults
 })
 ```
@@ -94,7 +120,7 @@ Parsing dominates. Process start-up adds about 40 ms per call from the editor.
 
 ## Status
 
-- Languages: Python.
+- Languages: Python, Markdown.
 - Next: fold text and appearance, more languages, a visibility plan that
   decides what to show rather than what to hide, and scope-aware retrieval
   for RAG.

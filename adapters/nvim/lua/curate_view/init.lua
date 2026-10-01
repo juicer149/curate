@@ -35,7 +35,7 @@ end
 
 local DEFAULTS = {
   cmd = nil, -- resolved in setup(): default_cmd()
-  languages = { python = "python" }, -- filetype -> Curate language
+  languages = { python = "python", markdown = "markdown" }, -- filetype -> Curate language
   keymaps = {
     fold_next = "<leader>f",
     fold_max = "<leader>F",
