@@ -70,8 +70,9 @@ SPEC = LanguageSpec(
 ```
 
 Nothing else is registered; the file name is the lookup. Add the grammar
-package to the `treesitter` extra and the filetype to the Neovim plugin's
-`languages`.
+package to the `treesitter` extra. The Neovim plugin sends the buffer's
+filetype as the language, so a filetype that matches one of `NAMES` works
+without touching the plugin.
 
 ## Neovim
 
@@ -99,7 +100,7 @@ Options:
 ```lua
 require("curate_view").setup({
   cmd = { "curate" },          -- command prefix
-  languages = { python = "python", markdown = "markdown" },  -- filetype -> language
+  languages = { mdx = "markdown" },  -- only filetypes Curate does not know by name
   keymaps = false,             -- or a table overriding the defaults
 })
 ```

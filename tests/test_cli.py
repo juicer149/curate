@@ -65,3 +65,16 @@ def test_chain_on_markdown_fixture_infers_language(capsys):
         ("h2", 5, 12),
         ("h1", 1, 16),
     ]
+
+
+def test_unknown_language_is_an_error(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO("x\n"))
+    assert main(["chain", "-", "--line", "1", "--language", "lua"]) == 2
+    assert "no structure support for language 'lua'" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("alias", ["py", "Python"])
+def test_language_aliases_are_accepted(monkeypatch, alias):
+    pytest.importorskip("tree_sitter_python")
+    monkeypatch.setattr("sys.stdin", io.StringIO("def f():\n    pass\n"))
+    assert main(["chain", "-", "--line", "2", "--language", alias]) == 0

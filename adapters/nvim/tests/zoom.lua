@@ -94,5 +94,33 @@ case("no scope on a blank line", function(check)
   at(20); cv.fold_next(); check("f between functions", "")
 end)
 
+-- The filetype is sent as the language; unknown ones get a message, not a fold.
+local messages = {}
+vim.notify = function(msg) table.insert(messages, msg) end
+
+local function notified(name, text)
+  count = count + 1
+  local hit = false
+  for _, m in ipairs(messages) do
+    if m:find(text, 1, true) then hit = true end
+  end
+  if not hit then
+    failures = failures + 1
+    print(string.format("FAIL %s\n     want message containing [%s]\n     got  [%s]",
+      name, text, table.concat(messages, " | ")))
+  end
+  messages = {}
+end
+
+case("filetype decides the language", function(check)
+  vim.bo.filetype = "lua"
+  at(16); cv.fold_next(); check("f with an unknown filetype", "")
+  notified("unknown filetype", "no structure support for language 'lua'")
+  vim.bo.filetype = ""
+  cv.fold_next(); check("f without a filetype", "")
+  notified("no filetype", "buffer has no filetype")
+  vim.bo.filetype = "python"
+end)
+
 print(string.format("%d checks, %d failed", count, failures))
 vim.cmd(failures == 0 and "qa!" or "cquit 1")

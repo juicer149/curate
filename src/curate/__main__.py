@@ -36,7 +36,7 @@ def _read_source(path: str) -> str:
 def _language(args: argparse.Namespace) -> str | None:
     """--language if given, else the file suffix; None if neither tells."""
     if args.language:
-        return args.language
+        return args.language.lower()
     if args.file == "-":
         return None
     from .producers.treesitter.languages import language_for_path
@@ -50,6 +50,13 @@ def _cmd_chain(args: argparse.Namespace) -> int:
         what = "stdin" if args.file == "-" else f"'{args.file}'"
         print(f"curate: cannot tell the language of {what}; pass --language", file=sys.stderr)
         return 2
+
+    if args.producer == "treesitter":
+        from .producers.treesitter.languages import resolve
+
+        if resolve(language) is None:
+            print(f"curate: no structure support for language '{language}'", file=sys.stderr)
+            return 2
 
     source = _read_source(args.file)
 

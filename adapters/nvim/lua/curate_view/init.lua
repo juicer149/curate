@@ -35,7 +35,9 @@ end
 
 local DEFAULTS = {
   cmd = nil, -- resolved in setup(): default_cmd()
-  languages = { python = "python", markdown = "markdown" }, -- filetype -> Curate language
+  -- The filetype is sent as the language; Curate resolves it against its
+  -- language files. Map here only filetypes whose name Curate does not know.
+  languages = {}, -- filetype -> Curate language
   keymaps = {
     fold_next = "<leader>f",
     fold_max = "<leader>F",
@@ -169,11 +171,11 @@ local function current_state()
   end
 
   local ft = vim.bo[buf].filetype
-  local language = CONFIG.languages[ft]
-  if not language then
-    notify("no structure support for filetype '" .. ft .. "'")
+  if ft == "" then
+    notify("buffer has no filetype")
     return nil
   end
+  local language = CONFIG.languages[ft] or ft
 
   local line = cursor_line()
   local chain = fetch_chain(buf, line, language)
@@ -267,7 +269,8 @@ function M.unfold_all()
 end
 
 -- opts.cmd       list, command that runs Curate (default: repo .venv, else PATH)
--- opts.languages table, filetype -> Curate language
+-- opts.languages table, filetype -> Curate language, for filetypes Curate
+--                does not know by name (default: none; the filetype is sent)
 -- opts.keymaps   table of action -> key, or false to set no keymaps
 function M.setup(opts)
   opts = opts or {}
