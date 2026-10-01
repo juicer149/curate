@@ -8,7 +8,7 @@ import pytest
 
 from curate.__main__ import main
 
-FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "python_minimal.py"
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "python_minimal.py"
 
 
 def test_chain_json_contract(monkeypatch, capsys):

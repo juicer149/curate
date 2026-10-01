@@ -11,7 +11,7 @@ from curate import compile_scopes  # noqa: E402
 from curate.relations import chain  # noqa: E402
 from curate.validate import validate_scope_set  # noqa: E402
 
-FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "python_minimal.py"
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "python_minimal.py"
 pytestmark = pytest.mark.treesitter
 
 

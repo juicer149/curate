@@ -39,7 +39,7 @@ install: venv
 # ------------------------------------------------------------
 
 test:
-	$(PYTEST) -q src/curate/tests
+	$(PYTEST) -q
 
 test-nvim:
 	nvim --headless --clean -u NONE -c "luafile adapters/nvim/tests/zoom.lua"

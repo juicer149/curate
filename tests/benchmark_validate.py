@@ -1,4 +1,4 @@
-# src/curate/tests/benchmark_validate.py
+# tests/benchmark_validate.py
 from __future__ import annotations
 
 import pytest
