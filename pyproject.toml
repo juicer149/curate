@@ -8,54 +8,56 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "curate"
-version = "0.3.0"
-description = "Curate — structural intermediate representation for source code"
-requires-python = ">=3.10"
-dependencies = []
-
-# Optional but recommended
-authors = [
-  { name = "Albin" }
-]
+version = "0.4.0"
+description = "Code as nested scopes: a tree-sitter core that folds outward in Neovim, one scope at a time"
 readme = "README.md"
+requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "Albin" }]
+keywords = ["tree-sitter", "neovim", "folding", "code-structure"]
+dependencies = []
+
+[project.optional-dependencies]
+treesitter = [
+  "tree-sitter>=0.25",
+  "tree-sitter-python>=0.25",
+]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-benchmark",
+]
+
+[project.urls]
+Repository = "https://github.com/juicer149/curate"
 
 [project.scripts]
 curate = "curate.__main__:main"
 
 # ============================================================
-# Packaging (src-layout)
+# Packaging (src layout)
 # ============================================================
-
-[tool.setuptools]
-package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 # ============================================================
-# Pytest configuration
+# Pytest and coverage
 # ============================================================
 
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["src"]
-
 markers = [
   "treesitter: tests that require tree-sitter and language bindings",
 ]
-
 addopts = [
   "--cov=curate",
   "--cov-report=term-missing",
   "--cov-report=html",
 ]
-
-# ============================================================
-# Coverage configuration
-# ============================================================
 
 [tool.coverage.run]
 branch = true
@@ -64,21 +66,3 @@ source = ["curate"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
-
-# ============================================================
-# Optional dependencies
-# ============================================================
-
-[project.optional-dependencies]
-
-dev = [
-  "pytest",
-  "pytest-cov",
-  "pytest-benchmark",
-  "ptpython",
-]
-
-treesitter = [
-  "tree-sitter>=0.25",
-  "tree-sitter-python>=0.25",
-]

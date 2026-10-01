@@ -8,6 +8,7 @@ __pycache__/
 *.egg-info/
 .eggs/
 .pytest_cache/
+.benchmarks/
 .mypy_cache/
 .ruff_cache/
 .coverage
@@ -36,4 +37,3 @@ luac.out
 .DS_Store
 .idea/
 .vscode/
-bench_curate.py
