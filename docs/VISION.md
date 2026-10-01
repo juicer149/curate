@@ -120,8 +120,8 @@ The engine:
 
 - parses source input
 - builds a tree of structural nodes
-- resolves the smallest node covering the cursor
-- returns line ranges to fold
+- resolves every scope containing the cursor, innermost first
+- returns their line ranges; the editor decides what to fold
 
 The engine:
 
@@ -155,25 +155,20 @@ The client never:
 
 ## Version Roadmap
 
-### v1 — Python AST Folding (current)
+### v1 — Python, tree-sitter, zoom folding (current)
 
-**Scope**
+**Done**
 
-- Python only
-- AST-based structure
-- Node types:
-  - module
-  - class
-  - function
-  - docstring
+- tree-sitter producer with a per-language spec (Python first)
+- language-free core: laminar selection and addresses in O(n log n)
+- `at` / `chain` queries and the `curate chain` CLI
+- Neovim plugin: fold outward scope by scope, unfold inward
 
-**Intent**
+**Next**
 
-- prove the model
-- lock command semantics
-- validate performance and UX
-
-No filesystem integration.
+- fold text and appearance
+- more languages through new `LanguageSpec`s
+- a visibility plan: decide what to show, not only what to hide
 
 ---
 
@@ -191,6 +186,12 @@ This creates a unified navigation surface for:
 - code
 - projects
 - repositories
+
+A first prototype exists in git history (`git show 6195b54:src/curate_next/`):
+a container tree in the same address space as scopes (folder → file → module),
+and filesystem ingest with pluggable path rules (gitignore, binary files,
+manifest). It was removed because it no longer matched the core; the ideas are
+the starting point for this step.
 
 ---
 
