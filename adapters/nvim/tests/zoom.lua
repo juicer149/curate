@@ -134,6 +134,7 @@ case("fold text", function(check)
   local chunks = cv.render_fold(0, 7, 19)
   equal("first line + count", text_of(chunks), "def top(): ··· 13")
   equal("count is dimmed", chunks[#chunks][2], "Comment")
+  equal("no Folded background", vim.wo.winhighlight:find("Folded:CurateFolded", 1, true) ~= nil, true)
   equal("indented line keeps its indent", text_of(cv.render_fold(0, 23, 24)), "    def m(self): ··· 2")
 end)
 

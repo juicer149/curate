@@ -110,7 +110,8 @@ require("curate_view").setup()
 Folds are ordinary manual folds owned by Neovim, so `za`, `zo` and friends keep
 working, and several folds can exist at once. A closed fold shows its first
 line with the buffer's own highlighting and a dimmed count of the lines it
-holds, e.g. `def add(self, item): ··· 9`. The plugin uses
+holds, e.g. `def add(self, item): ··· 9`, without the colorscheme's `Folded`
+background. To get that back: `:hi link CurateFolded Folded`. The plugin uses
 `<repo>/.venv/bin/curate` when it exists and `curate` on `PATH` otherwise.
 
 Options:

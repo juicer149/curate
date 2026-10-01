@@ -85,6 +85,10 @@ end
 
 local FOLDTEXT = "v:lua.require'curate_view'.foldtext()"
 
+-- Empty by default, so folded lines keep the buffer's look; `default` lets a
+-- colorscheme or the user define it instead.
+vim.api.nvim_set_hl(0, "CurateFolded", { default = true })
+
 local function ensure_manual_folds()
   -- Only switch when needed: re-setting fold options can reopen other folds.
   if vim.wo.foldmethod ~= "manual" then
@@ -94,6 +98,9 @@ local function ensure_manual_folds()
   if CONFIG.foldtext and vim.wo.foldtext ~= FOLDTEXT then
     vim.wo.foldtext = FOLDTEXT
     vim.opt_local.fillchars:append({ fold = " " })
+    -- A closed fold looks like the line itself: Folded is mapped to an empty
+    -- group in this window. `:hi link CurateFolded Folded` brings it back.
+    vim.opt_local.winhighlight:append({ Folded = "CurateFolded" })
   end
 end
 
@@ -173,7 +180,7 @@ local function line_chunks(buf, lnum)
   for c = 0, #line - 1 do
     local g = groups[c]
     if g ~= group and text ~= "" then
-      table.insert(chunks, { text, group or "Folded" })
+      table.insert(chunks, { text, group or "CurateFolded" })
       text = ""
     end
     group = g
@@ -181,7 +188,7 @@ local function line_chunks(buf, lnum)
     text = text .. (ch == "\t" and tab or ch)
   end
   if text ~= "" then
-    table.insert(chunks, { text, group or "Folded" })
+    table.insert(chunks, { text, group or "CurateFolded" })
   end
   return chunks
 end
