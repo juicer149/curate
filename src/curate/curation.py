@@ -20,14 +20,33 @@ def select_laminar(facts: Iterable[RawFact]) -> list[RawFact]:
     Properties:
         - Deterministic
         - Total
-        - Allows hierarchical structure to emerge    """
+        - Allows hierarchical structure to emerge
+        - O(n log n): one sort, then a single pass
+
+    Algorithm:
+        Facts are visited in policy order (start ascending, longer first).
+        A stack holds the accepted facts that are still "open", i.e. whose
+        span may contain later facts. Before a candidate is checked, every
+        open fact that ends before the candidate starts is closed (popped):
+        it is disjoint from this and every later candidate.
+
+        What remains on top is the innermost accepted fact that overlaps
+        the candidate. Deeper stack entries contain the top, so checking
+        the candidate against the top alone is equivalent to checking it
+        against every accepted fact. The rule itself stays in `policy`.
+    """
     ordered = sorted(facts, key=policy.laminar_priority)
 
     accepted: list[RawFact] = []
+    open_stack: list[RawFact] = []
 
     for fact in ordered:
-        if policy.is_compatible_laminar(accepted, fact):
+        while open_stack and open_stack[-1].span.end < fact.span.start:
+            open_stack.pop()
+
+        if policy.is_compatible_laminar(open_stack[-1:], fact):
             accepted.append(fact)
+            open_stack.append(fact)
 
     return accepted
 
@@ -40,12 +59,17 @@ def assign_addresses(facts: list[RawFact]) -> ScopeSet:
     """
     Assign hierarchical addresses to a laminar sequence of facts.
 
+    Precondition:
+        `facts` is laminar and in policy order (as returned by
+        `select_laminar`).
+
     Strategy:
         - Inject a single root scope
-        - Choose the parent as the deepest containing scope
+        - The parent is the innermost open scope that contains the fact
+          (a containment stack, O(n) overall)
         - Assign child indices contiguously per parent
     """
-    scopes: list[Scope] = []
+    scopes: List[Scope] = []
     next_index: Dict[Address, int] = {}
 
     root = Scope(
@@ -57,14 +81,15 @@ def assign_addresses(facts: list[RawFact]) -> ScopeSet:
     scopes.append(root)
     next_index[root.address] = 0
 
+    open_stack: List[Scope] = []
+
     for fact in facts:
-        parent = root
+        while open_stack and not open_stack[-1].span.contains(fact.span):
+            open_stack.pop()
 
-        for s in scopes:
-            if s.span.contains(fact.span) and s.span.length < parent.span.length:
-                parent = s
+        parent = open_stack[-1] if open_stack else root
 
-        idx = next_index.get(parent.address, 0)
+        idx = next_index[parent.address]
         next_index[parent.address] = idx + 1
 
         addr = parent.address.child(idx)
@@ -77,6 +102,7 @@ def assign_addresses(facts: list[RawFact]) -> ScopeSet:
 
         scopes.append(scope)
         next_index[addr] = 0
+        open_stack.append(scope)
 
     return ScopeSet(tuple(scopes))
 
