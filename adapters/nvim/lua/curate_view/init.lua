@@ -42,6 +42,10 @@ local DEFAULTS = {
   -- The filetype is sent as the language; Curate resolves it against its
   -- language files. Map here only filetypes whose name Curate does not know.
   languages = {}, -- filetype -> Curate language
+  -- Closed folds show their first line with its own highlighting and a
+  -- dimmed line count. Set in windows where curate_view folds; false = leave
+  -- foldtext alone.
+  foldtext = true,
   keymaps = {
     fold_next = "<leader>f",
     fold_max = "<leader>F",
@@ -79,12 +83,18 @@ end
 -- Folds
 -- ============================================================================
 
+local FOLDTEXT = "v:lua.require'curate_view'.foldtext()"
+
 local function ensure_manual_folds()
   -- Only switch when needed: re-setting fold options can reopen other folds.
   if vim.wo.foldmethod ~= "manual" then
     vim.wo.foldmethod = "manual"
   end
   vim.wo.foldenable = true
+  if CONFIG.foldtext and vim.wo.foldtext ~= FOLDTEXT then
+    vim.wo.foldtext = FOLDTEXT
+    vim.opt_local.fillchars:append({ fold = " " })
+  end
 end
 
 local function create_fold(s)
@@ -99,6 +109,94 @@ end
 
 local function restore_cursor(st)
   pcall(vim.api.nvim_win_set_cursor, 0, { st.anchor, 0 })
+end
+
+-- ============================================================================
+-- Fold text
+-- ============================================================================
+
+-- Highlight group per byte of a line, from Tree-sitter when the buffer has a
+-- parser and a highlights query, else from legacy syntax. Empty when neither.
+local function line_highlights(buf, lnum, line)
+  local groups = {}
+  local row = lnum - 1
+
+  local ok, parser = pcall(vim.treesitter.get_parser, buf)
+  if ok and parser then
+    -- Parse just this row where supported (injections included); a full
+    -- parse is incremental and cached otherwise.
+    if not pcall(parser.parse, parser, { row, 0, row + 1, 0 }) then
+      pcall(parser.parse, parser)
+    end
+    parser:for_each_tree(function(tree, ltree)
+      local query = vim.treesitter.query.get(ltree:lang(), "highlights")
+      if not query then
+        return
+      end
+      for id, node in query:iter_captures(tree:root(), buf, row, row + 1) do
+        local name = query.captures[id]
+        if name:sub(1, 1) ~= "_" and name ~= "spell" and name ~= "nospell" then
+          local sr, sc, er, ec = node:range()
+          if sr <= row and er >= row then
+            local from = sr < row and 0 or sc
+            local to = er > row and #line or ec
+            for c = from, to - 1 do
+              groups[c] = "@" .. name .. "." .. ltree:lang()
+            end
+          end
+        end
+      end
+    end)
+    if next(groups) ~= nil then
+      return groups
+    end
+  end
+
+  if vim.bo[buf].syntax ~= "" then
+    for c = 0, #line - 1 do
+      local id = vim.fn.synID(lnum, c + 1, 1)
+      if id ~= 0 then
+        groups[c] = vim.fn.synIDattr(vim.fn.synIDtrans(id), "name")
+      end
+    end
+  end
+  return groups
+end
+
+-- { {text, hl}, ... } for one buffer line, tabs expanded.
+local function line_chunks(buf, lnum)
+  local line = vim.api.nvim_buf_get_lines(buf, lnum - 1, lnum, false)[1] or ""
+  local groups = line_highlights(buf, lnum, line)
+  local tab = string.rep(" ", vim.bo[buf].tabstop)
+
+  local chunks, text, group = {}, "", nil
+  for c = 0, #line - 1 do
+    local g = groups[c]
+    if g ~= group and text ~= "" then
+      table.insert(chunks, { text, group or "Folded" })
+      text = ""
+    end
+    group = g
+    local ch = line:sub(c + 1, c + 1)
+    text = text .. (ch == "\t" and tab or ch)
+  end
+  if text ~= "" then
+    table.insert(chunks, { text, group or "Folded" })
+  end
+  return chunks
+end
+
+-- The fold text for lines start..end: the first line as it looks in the
+-- buffer, then a dimmed count of the lines the fold holds.
+function M.render_fold(buf, start, finish)
+  local chunks = line_chunks(buf, start)
+  table.insert(chunks, { " ··· " .. (finish - start + 1), "Comment" })
+  return chunks
+end
+
+-- 'foldtext' entry point (set by ensure_manual_folds).
+function M.foldtext()
+  return M.render_fold(vim.api.nvim_get_current_buf(), vim.v.foldstart, vim.v.foldend)
 end
 
 -- ============================================================================
@@ -332,6 +430,7 @@ end
 -- opts.cmd       list, command that runs Curate (default: repo .venv, else PATH)
 -- opts.languages table, filetype -> Curate language, for filetypes Curate
 --                does not know by name (default: none; the filetype is sent)
+-- opts.foldtext  true (default): first line + line count; false: leave it alone
 -- opts.keymaps   table of action -> key, or false to set no keymaps
 function M.setup(opts)
   opts = opts or {}

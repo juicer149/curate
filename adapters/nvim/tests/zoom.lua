@@ -113,6 +113,30 @@ case("outline replaces earlier folds and u opens one", function(check)
   at(7); cv.unfold_next(); check("u on top()", "23-24")
 end)
 
+-- Fold text: first line as in the buffer, then a dimmed line count.
+local function text_of(chunks)
+  local out = {}
+  for _, c in ipairs(chunks) do table.insert(out, c[1]) end
+  return table.concat(out)
+end
+
+local function equal(name, got, want)
+  count = count + 1
+  if got ~= want then
+    failures = failures + 1
+    print(string.format("FAIL %s\n     want [%s]\n     got  [%s]", name, tostring(want), tostring(got)))
+  end
+end
+
+case("fold text", function(check)
+  at(16); cv.fold_max()
+  equal("foldtext is set where curate folds", vim.wo.foldtext, "v:lua.require'curate_view'.foldtext()")
+  local chunks = cv.render_fold(0, 7, 19)
+  equal("first line + count", text_of(chunks), "def top(): ··· 13")
+  equal("count is dimmed", chunks[#chunks][2], "Comment")
+  equal("indented line keeps its indent", text_of(cv.render_fold(0, 23, 24)), "    def m(self): ··· 2")
+end)
+
 -- The filetype is sent as the language; unknown ones get a message, not a fold.
 local messages = {}
 vim.notify = function(msg) table.insert(messages, msg) end

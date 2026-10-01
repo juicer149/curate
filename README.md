@@ -108,7 +108,9 @@ require("curate_view").setup()
 | `<leader>U`  | unfold everything (`zE`)                 |
 
 Folds are ordinary manual folds owned by Neovim, so `za`, `zo` and friends keep
-working, and several folds can exist at once. The plugin uses
+working, and several folds can exist at once. A closed fold shows its first
+line with the buffer's own highlighting and a dimmed count of the lines it
+holds, e.g. `def add(self, item): ··· 9`. The plugin uses
 `<repo>/.venv/bin/curate` when it exists and `curate` on `PATH` otherwise.
 
 Options:
@@ -117,6 +119,7 @@ Options:
 require("curate_view").setup({
   cmd = { "curate" },          -- command prefix
   languages = { mdx = "markdown" },  -- only filetypes Curate does not know by name
+  foldtext = false,            -- keep your own 'foldtext' (default: true)
   keymaps = false,             -- or a table overriding the defaults
 })
 ```
