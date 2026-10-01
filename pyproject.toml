@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 # ============================================================
@@ -18,6 +18,8 @@ authors = [
   { name = "Albin" }
 ]
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.scripts]
 curate = "curate.__main__:main"

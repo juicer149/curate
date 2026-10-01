@@ -99,3 +99,7 @@ Parsing dominates. Process start-up adds about 40 ms per call from the editor.
 
 See [docs/VISION.md](docs/VISION.md) for the longer picture and
 [docs/PITFALLS.md](docs/PITFALLS.md) for editor hazards found along the way.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
