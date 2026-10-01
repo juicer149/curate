@@ -159,7 +159,7 @@ The client never:
 
 **Done**
 
-- tree-sitter producer with a per-language spec (Python first)
+- tree-sitter producer, one file per language (Python, Markdown)
 - language-free core: laminar selection and addresses in O(n log n)
 - `at` / `chain` queries and the `curate chain` CLI
 - Neovim plugin: fold outward scope by scope, unfold inward
@@ -167,7 +167,7 @@ The client never:
 **Next**
 
 - fold text and appearance
-- more languages through new `LanguageSpec`s
+- more languages: one file each in `producers/treesitter/languages/`
 - a visibility plan: decide what to show, not only what to hide
 
 ---
@@ -201,7 +201,6 @@ Introduce heuristic backends for non-Python files:
 
 | Type | Strategy |
 |----|---------|
-| Markdown | headings |
 | YAML | indentation |
 | JSON | braces |
 | Unknown | indentation-only |
