@@ -34,5 +34,7 @@ SPEC = LanguageSpec(
         "case_clause": "case",
     },
     wrappers=frozenset({"decorated_definition"}),
+    # Outline: classes show their methods, functions fold whole.
+    outline={"class": "open", "function": "closed"},
     load=_load,
 )

@@ -2,13 +2,21 @@
 Command-line interface for Curate.
 
     curate chain FILE --line N [--language NAME] [--producer treesitter]
+    curate outline FILE [--language NAME] [--producer treesitter]
 
-Prints the structural path at a line as JSON, innermost scope first:
+`chain` prints the structural path at a line as JSON, innermost first.
+"outline" says how the scope shows in the file's outline ("open",
+"closed" or null):
 
     {"line": 16, "chain": [
-        {"address": [0, 1], "label": "if", "start": 15, "end": 17},
-        {"address": [0], "label": "function", "start": 7, "end": 19}
+        {"address": [0, 1], "label": "if", "start": 15, "end": 17, "outline": null},
+        {"address": [0], "label": "function", "start": 7, "end": 19, "outline": "closed"}
     ]}
+
+`outline` prints the line ranges to fold so only the skeleton shows
+(see curate.outline); they never overlap:
+
+    {"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}]}
 
 Lines are 1-based and inclusive. FILE may be "-" for stdin.
 Without --language the language comes from the file suffix (.py, .md);
@@ -23,6 +31,8 @@ import json
 import sys
 
 from .compile import compile_scopes
+from .facts import ScopeSet
+from .outline import outline_folds
 from .relations import chain
 
 
@@ -44,34 +54,44 @@ def _language(args: argparse.Namespace) -> str | None:
     return language_for_path(args.file)
 
 
-def _cmd_chain(args: argparse.Namespace) -> int:
+class _Fail(Exception):
+    """A message for stderr and an exit code."""
+
+    def __init__(self, message: str, code: int) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+def _compile(args: argparse.Namespace) -> tuple[ScopeSet, dict[str, str]]:
+    """Read, compile and return the scopes with the language's outline kinds."""
     language = _language(args)
     if language is None:
         what = "stdin" if args.file == "-" else f"'{args.file}'"
-        print(f"curate: cannot tell the language of {what}; pass --language", file=sys.stderr)
-        return 2
+        raise _Fail(f"cannot tell the language of {what}; pass --language", 2)
 
+    kinds: dict[str, str] = {}
     if args.producer == "treesitter":
-        from .producers.treesitter.languages import resolve
+        from .producers.treesitter.languages import get_spec
 
-        if resolve(language) is None:
-            print(f"curate: no structure support for language '{language}'", file=sys.stderr)
-            return 2
-
-    source = _read_source(args.file)
+        spec = get_spec(language)
+        if spec is None:
+            raise _Fail(f"no structure support for language '{language}'", 2)
+        kinds = dict(spec.outline)
 
     errors: list[str] = []
     scopes = compile_scopes(
-        source=source,
+        source=_read_source(args.file),
         language=language,
         producer=args.producer,
         on_error=lambda e: errors.append(f"{type(e).__name__}: {e}"),
     )
     if errors:
-        print(f"curate: producer '{args.producer}' failed: {errors[0]}", file=sys.stderr)
-        return 1
+        raise _Fail(f"producer '{args.producer}' failed: {errors[0]}", 1)
+    return scopes, kinds
 
-    path = chain(scopes, args.line)
+
+def _cmd_chain(args: argparse.Namespace) -> int:
+    scopes, kinds = _compile(args)
     print(json.dumps({
         "line": args.line,
         "chain": [
@@ -80,9 +100,18 @@ def _cmd_chain(args: argparse.Namespace) -> int:
                 "label": s.label,
                 "start": s.span.start,
                 "end": s.span.end,
+                "outline": kinds.get(s.label),
             }
-            for s in path
+            for s in chain(scopes, args.line)
         ],
+    }))
+    return 0
+
+
+def _cmd_outline(args: argparse.Namespace) -> int:
+    scopes, kinds = _compile(args)
+    print(json.dumps({
+        "folds": [{"start": f.start, "end": f.end} for f in outline_folds(scopes, kinds)],
     }))
     return 0
 
@@ -98,8 +127,18 @@ def main(argv: list[str] | None = None) -> int:
     p_chain.add_argument("--producer", default="treesitter")
     p_chain.set_defaults(func=_cmd_chain)
 
+    p_outline = sub.add_parser("outline", help="line ranges to fold for the file's outline")
+    p_outline.add_argument("file", help='source file, or "-" for stdin')
+    p_outline.add_argument("--language", help="e.g. python, markdown (default: from the file suffix)")
+    p_outline.add_argument("--producer", default="treesitter")
+    p_outline.set_defaults(func=_cmd_outline)
+
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except _Fail as e:
+        print(f"curate: {e}", file=sys.stderr)
+        return e.code
 
 
 if __name__ == "__main__":

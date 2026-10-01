@@ -19,8 +19,8 @@ def test_chain_json_contract(monkeypatch, capsys):
     assert out == {
         "line": 20,
         "chain": [
-            {"address": [0, 0], "label": "B", "start": 15, "end": 30},
-            {"address": [0], "label": "A", "start": 10, "end": 50},
+            {"address": [0, 0], "label": "B", "start": 15, "end": 30, "outline": None},
+            {"address": [0], "label": "A", "start": 10, "end": 50, "outline": None},
         ],
     }
 
@@ -78,3 +78,37 @@ def test_language_aliases_are_accepted(monkeypatch, alias):
     pytest.importorskip("tree_sitter_python")
     monkeypatch.setattr("sys.stdin", io.StringIO("def f():\n    pass\n"))
     assert main(["chain", "-", "--line", "2", "--language", alias]) == 0
+
+
+@pytest.mark.treesitter
+def test_chain_reports_outline_kind(capsys):
+    pytest.importorskip("tree_sitter_python")
+    assert main(["chain", str(FIXTURE), "--line", "23"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [(c["label"], c["outline"]) for c in out["chain"]] == [
+        ("function", "closed"),
+        ("class", "open"),
+    ]
+
+
+@pytest.mark.treesitter
+def test_outline_python_fixture(capsys):
+    pytest.importorskip("tree_sitter_python")
+    assert main(["outline", str(FIXTURE)]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}],
+    }
+
+
+@pytest.mark.treesitter
+def test_outline_markdown_fixture(capsys):
+    pytest.importorskip("tree_sitter_markdown")
+    assert main(["outline", str(FIXTURES / "markdown_minimal.md")]) == 0
+    folds = json.loads(capsys.readouterr().out)["folds"]
+    assert [(f["start"], f["end"]) for f in folds] == [(1, 4), (5, 8), (9, 12), (13, 16), (17, 19)]
+
+
+def test_outline_needs_a_language(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO("x\n"))
+    assert main(["outline", "-"]) == 2
+    assert "pass --language" in capsys.readouterr().err

@@ -5,6 +5,7 @@
 --
 -- Runs against tests/fixtures/python_minimal.py, whose line numbers are fixed:
 --   top() 7-19 > inner() 11-13, if 15-17;  class C 22-24 > m() 23-24
+--   outline: 7-19 (top, whole) and 23-24 (m; the class line stays open)
 -- CURATE_CMD overrides the command (default: the adapter's own lookup).
 
 local root = vim.fn.getcwd()
@@ -59,11 +60,6 @@ case("zoom out and in", function(check)
   cv.unfold_next(); check("u: nothing folded", "")
 end)
 
-case("fold_max steps back down", function(check)
-  at(24); cv.fold_max(); check("F from m()", "22-24")
-  cv.unfold_next(); check("u: m() still folded", "23-24")
-end)
-
 case("a new position starts a new zoom", function(check)
   at(7); cv.fold_next(); check("f on the def line", "7-19")
   cv.unfold_all()
@@ -92,6 +88,29 @@ end)
 
 case("no scope on a blank line", function(check)
   at(20); cv.fold_next(); check("f between functions", "")
+end)
+
+case("F: fold the function, then the outline", function(check)
+  at(16); cv.fold_max(); check("F inside top(): fold top()", "7-19")
+  cv.unfold_next(); check("u steps back in to the if", "15-17")
+  cv.unfold_all()
+  at(16); cv.fold_max(); cv.fold_max(); check("F F: outline", "7-19 23-24")
+end)
+
+case("F outside functions gives the outline", function(check)
+  at(20); cv.fold_max(); check("F on a blank line", "7-19 23-24")
+  at(22); cv.fold_max(); check("F on the class line", "7-19 23-24")
+end)
+
+case("F in a method folds the method, not the class", function(check)
+  at(24); cv.fold_max(); check("F in m()", "23-24")
+  cv.fold_max(); check("F again: outline", "7-19 23-24")
+end)
+
+case("outline replaces earlier folds and u opens one", function(check)
+  at(12); cv.fold_next(); check("f in inner()", "11-13")
+  at(20); cv.fold_max(); check("F: outline only", "7-19 23-24")
+  at(7); cv.unfold_next(); check("u on top()", "23-24")
 end)
 
 -- The filetype is sent as the language; unknown ones get a message, not a fold.

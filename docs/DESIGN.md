@@ -327,6 +327,14 @@ Violating those invariants results in undefined behavior.
 Consumers requiring faster traversal or lookup
 are expected to build derived indexes externally.
 
+### Outline
+
+`outline_folds(scopes, kinds)` in `outline.py` is the first view built on
+these relations: the line ranges to fold so that only a file's skeleton
+shows. It stays language-free; the caller passes which labels are outline
+entries and whether each is `"open"` (its header and the entries inside it
+show) or `"closed"` (folded whole). Language files supply those kinds.
+
 ---
 
 ## Producers (adapters)

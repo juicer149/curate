@@ -169,6 +169,7 @@ The client never:
 - fold text and appearance
 - more languages: one file each in `producers/treesitter/languages/`
 - a visibility plan: decide what to show, not only what to hide
+  (first step done: `curate outline`, the file's skeleton)
 
 ---
 

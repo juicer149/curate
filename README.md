@@ -39,10 +39,25 @@ curate chain tests/fixtures/python_minimal.py --line 16
 
 ```json
 {"line": 16, "chain": [
-  {"address": [0, 1], "label": "if", "start": 15, "end": 17},
-  {"address": [0], "label": "function", "start": 7, "end": 19}
+  {"address": [0, 1], "label": "if", "start": 15, "end": 17, "outline": null},
+  {"address": [0], "label": "function", "start": 7, "end": 19, "outline": "closed"}
 ]}
 ```
+
+```sh
+curate outline tests/fixtures/python_minimal.py
+```
+
+```json
+{"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}]}
+```
+
+`chain` is the structural path at a line, innermost first. `outline` is the
+set of line ranges to fold so that only the file's skeleton shows: functions
+fold whole, classes keep their line and show their methods, Markdown keeps
+every heading. The ranges never overlap. Each language decides which of its
+scopes are part of the outline, and `"outline"` in `chain` says how a scope
+shows there.
 
 Lines are 1-based and inclusive. The language comes from the file suffix
 (`.py`, `.md`) unless `--language` is given; `FILE` may be `-` for stdin, which
@@ -65,6 +80,7 @@ NAMES = ("rust", "rs")          # first is the canonical name
 EXTENSIONS = (".rs",)
 SPEC = LanguageSpec(
     scopes={"function_item": "function", "impl_item": "impl"},
+    outline={"impl": "open", "function": "closed"},  # optional
     load=_load,                 # returns the tree_sitter.Language
 )
 ```
@@ -87,7 +103,7 @@ require("curate_view").setup()
 | Key          | Action                                   |
 |--------------|------------------------------------------|
 | `<leader>f`  | fold the next enclosing scope            |
-| `<leader>F`  | fold out to the outermost scope          |
+| `<leader>F`  | fold the function at the cursor; elsewhere, or pressed again, fold the file to its outline |
 | `<leader>u`  | unfold one level                         |
 | `<leader>U`  | unfold everything (`zE`)                 |
 

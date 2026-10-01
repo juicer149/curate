@@ -43,5 +43,7 @@ def _heading_level(node: Any, default: str) -> str:
 SPEC = LanguageSpec(
     scopes={"section": "section"},
     label=_heading_level,
+    # Outline: every heading shows; the text under it folds.
+    outline={"section": "open", **{f"h{n}": "open" for n in range(1, 7)}},
     load=_load,
 )

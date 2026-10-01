@@ -26,9 +26,14 @@ class LanguageSpec:
         Optional rule for languages whose label depends on more than the
         node type: (node, label from `scopes`) -> label. Markdown uses it
         to turn every `section` into h1..h6.
+
+    outline:
+        label -> "open" | "closed": which scopes make up the file's
+        outline and how they show (see curate.outline).
     """
 
     scopes: Mapping[str, str]
     load: Callable[[], Any]
     wrappers: frozenset[str] = field(default_factory=frozenset)
     label: Optional[Callable[[Any, str], str]] = None
+    outline: Mapping[str, str] = field(default_factory=dict)

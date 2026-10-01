@@ -7,6 +7,10 @@
 --     -> chain of scopes, innermost first
 --     -> one manual fold over chain[level]
 --
+-- <leader>F folds the function at the cursor, or else the whole file down to
+-- its outline (`curate outline`): functions one line each, classes showing
+-- their methods, every Markdown heading visible.
+--
 -- Curate knows nothing about Neovim; this file knows nothing about Tree-sitter.
 -- The chain is cached per buffer and changedtick: only the first keypress at a
 -- position calls Python, zooming further is instant.
@@ -101,13 +105,12 @@ end
 -- Python bridge
 -- ============================================================================
 
-local function fetch_chain(buf, line, language)
+-- Run `curate <args>` on the buffer's text; the decoded JSON, or nil after
+-- telling the user what went wrong.
+local function run(buf, args)
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local source = table.concat(lines, "\n") .. "\n"
-
-  local cmd = vim.list_extend(vim.deepcopy(CONFIG.cmd), {
-    "chain", "-", "--line", tostring(line), "--language", language,
-  })
+  local cmd = vim.list_extend(vim.deepcopy(CONFIG.cmd), args)
 
   local ok, res = pcall(function()
     return vim.system(cmd, { text = true, stdin = source }):wait()
@@ -122,8 +125,26 @@ local function fetch_chain(buf, line, language)
   end
 
   local decoded_ok, data = pcall(vim.json.decode, res.stdout or "")
-  if not decoded_ok or type(data) ~= "table" or type(data.chain) ~= "table" then
+  if not decoded_ok or type(data) ~= "table" then
     notify("invalid JSON from curate", vim.log.levels.ERROR)
+    return nil
+  end
+  return data
+end
+
+-- The language to ask Curate for: the filetype, unless mapped in setup().
+local function buffer_language(buf)
+  local ft = vim.bo[buf].filetype
+  if ft == "" then
+    notify("buffer has no filetype")
+    return nil
+  end
+  return CONFIG.languages[ft] or ft
+end
+
+local function fetch_chain(buf, line, language)
+  local data = run(buf, { "chain", "-", "--line", tostring(line), "--language", language })
+  if not data or type(data.chain) ~= "table" then
     return nil
   end
 
@@ -170,12 +191,10 @@ local function current_state()
     return st
   end
 
-  local ft = vim.bo[buf].filetype
-  if ft == "" then
-    notify("buffer has no filetype")
+  local language = buffer_language(buf)
+  if not language then
     return nil
   end
-  local language = CONFIG.languages[ft] or ft
 
   local line = cursor_line()
   local chain = fetch_chain(buf, line, language)
@@ -230,19 +249,61 @@ function M.fold_next()
   restore_cursor(st)
 end
 
--- Zoom straight out to the outermost scope (creating every level on the way,
--- so zooming back in steps through them).
-function M.fold_max()
-  local st = current_state()
-  if not st or #st.chain == 0 then
+-- Fold the whole file down to its outline: functions as one line each,
+-- classes and Markdown headings visible with their contents folded.
+-- Replaces the folds in the window.
+function M.outline()
+  local buf = vim.api.nvim_get_current_buf()
+  local language = buffer_language(buf)
+  if not language then
     return
   end
-  ensure_manual_folds()
-  while st.level < #st.chain do
-    st.level = st.level + 1
-    create_fold(st.chain[st.level])
+  local data = run(buf, { "outline", "-", "--language", language })
+  if not data or type(data.folds) ~= "table" then
+    return
   end
-  restore_cursor(st)
+
+  local line = cursor_line()
+  ensure_manual_folds()
+  pcall(vim.cmd, "normal! zE")
+  STATE[buf] = nil
+  for _, f in ipairs(data.folds) do
+    create_fold(f)
+  end
+  pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
+  if #data.folds == 0 then
+    notify("nothing to fold in the outline")
+  end
+end
+
+-- Inside a function or method: fold it, as the outline shows it (zooming
+-- through the scopes on the way, so <leader>u steps back in).
+-- Anywhere else, or pressed again: the outline of the whole file.
+function M.fold_max()
+  local st = current_state()
+  if not st then
+    return
+  end
+
+  -- The outermost scope at the cursor that the outline folds whole.
+  local target = 0
+  for i, s in ipairs(st.chain) do
+    if s.outline == "closed" then
+      target = i
+    end
+  end
+
+  if target > st.level then
+    ensure_manual_folds()
+    while st.level < target do
+      st.level = st.level + 1
+      create_fold(st.chain[st.level])
+    end
+    restore_cursor(st)
+    return
+  end
+
+  M.outline()
 end
 
 -- Zoom in one level: delete the outermost fold of the current zoom.
@@ -283,7 +344,7 @@ function M.setup(opts)
   if CONFIG.keymaps then
     local descs = {
       fold_next = "Curate: zoom out one scope",
-      fold_max = "Curate: zoom out to outermost scope",
+      fold_max = "Curate: fold this function, or outline the file",
       unfold_next = "Curate: zoom in one scope",
       unfold_all = "Curate: unfold all",
     }
