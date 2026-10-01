@@ -2,7 +2,7 @@
 # Curate — minimal developer Makefile
 # ============================================================
 
-.PHONY: help venv install test bench clean
+.PHONY: help venv install test test-nvim bench clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -18,6 +18,7 @@ help:
 	@echo "  make venv      Create virtual environment"
 	@echo "  make install   Install project in editable mode (dev extras)"
 	@echo "  make test      Run pytest suite"
+	@echo "  make test-nvim Run the Neovim adapter tests (headless)"
 	@echo "  make bench     Time producer, curation and chain at 100 to 100k lines"
 	@echo "  make clean     Remove caches and build artifacts"
 	@echo ""
@@ -39,6 +40,9 @@ install: venv
 
 test:
 	$(PYTEST) -q src/curate/tests
+
+test-nvim:
+	nvim --headless --clean -u NONE -c "luafile adapters/nvim/tests/zoom.lua"
 
 # ------------------------------------------------------------
 # Benchmark

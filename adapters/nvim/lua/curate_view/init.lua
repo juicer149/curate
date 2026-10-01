@@ -54,7 +54,7 @@ CONFIG.cmd = default_cmd()
 --   tick   = changedtick the chain was computed for,
 --   anchor = cursor line the chain was computed for,
 --   chain  = { {start=, ["end"]=, label=, address=}, ... } innermost first,
---   level  = 0 (nothing folded) .. #chain (outermost folded),
+--   level  = number of folds this zoom has created: chain[1..level] are folded,
 -- }
 
 local STATE = {}
@@ -74,25 +74,24 @@ end
 -- ============================================================================
 
 local function ensure_manual_folds()
-  vim.opt_local.foldmethod = "manual"
-  vim.opt_local.foldenable = true
-  vim.opt_local.foldlevel = 99
-  vim.opt_local.foldopen = ""
-end
-
-local function clear_folds()
-  vim.cmd("normal! zE")
-end
-
--- Show exactly one fold: the scope at the current zoom level.
-local function apply(st)
-  ensure_manual_folds()
-  clear_folds()
-  if st.level > 0 then
-    local s = st.chain[st.level]
-    vim.cmd(string.format("%d,%dfold", s.start, s["end"]))
+  -- Only switch when needed: re-setting fold options can reopen other folds.
+  if vim.wo.foldmethod ~= "manual" then
+    vim.wo.foldmethod = "manual"
   end
-  -- Keep the cursor where the zoom started, so zooming in returns there.
+  vim.wo.foldenable = true
+end
+
+local function create_fold(s)
+  vim.cmd(string.format("%d,%dfold", s.start, s["end"]))
+end
+
+-- Delete the closed fold that starts at s.start. Nested folds stay.
+local function delete_fold(s)
+  pcall(vim.api.nvim_win_set_cursor, 0, { s.start, 0 })
+  pcall(vim.cmd, "normal! zd")
+end
+
+local function restore_cursor(st)
   pcall(vim.api.nvim_win_set_cursor, 0, { st.anchor, 0 })
 end
 
@@ -144,8 +143,9 @@ local function cursor_line()
   return vim.api.nvim_win_get_cursor(0)[1]
 end
 
--- The cached chain is valid while the text is unchanged and the cursor is
--- still inside the region currently shown (or the innermost scope at level 0).
+-- The cached chain belongs to one position. It is valid while the text is
+-- unchanged and the cursor is where the zoom started: on the anchor line, or
+-- anywhere inside the fold the zoom has closed (you cannot move inside it).
 local function still_valid(st, buf)
   if not st or #st.chain == 0 then
     return false
@@ -153,8 +153,11 @@ local function still_valid(st, buf)
   if st.tick ~= vim.api.nvim_buf_get_changedtick(buf) then
     return false
   end
-  local s = st.chain[math.max(st.level, 1)]
   local line = cursor_line()
+  if st.level == 0 then
+    return line == st.anchor
+  end
+  local s = st.chain[st.level]
   return line >= s.start and line <= s["end"]
 end
 
@@ -178,11 +181,24 @@ local function current_state()
     return nil
   end
 
+  -- Neovim owns the folds: if the cursor is inside a closed fold that is one
+  -- of the chain's scopes (folded earlier), continue the zoom from there.
+  local level = 0
+  local fs, fe = vim.fn.foldclosed(line), vim.fn.foldclosedend(line)
+  if fs ~= -1 then
+    for i, s in ipairs(chain) do
+      if s.start == fs and s["end"] == fe then
+        level = i
+        break
+      end
+    end
+  end
+
   st = {
     tick = vim.api.nvim_buf_get_changedtick(buf),
     anchor = line,
     chain = chain,
-    level = 0,
+    level = level,
   }
   STATE[buf] = st
   return st
@@ -202,38 +218,52 @@ function M.fold_next()
     notify("no enclosing scope here")
     return
   end
-  st.level = math.min(st.level + 1, #st.chain)
-  apply(st)
+  if st.level >= #st.chain then
+    notify("already at the outermost scope")
+    return
+  end
+  ensure_manual_folds()
+  st.level = st.level + 1
+  create_fold(st.chain[st.level])
+  restore_cursor(st)
 end
 
--- Zoom straight out to the outermost scope.
+-- Zoom straight out to the outermost scope (creating every level on the way,
+-- so zooming back in steps through them).
 function M.fold_max()
   local st = current_state()
   if not st or #st.chain == 0 then
     return
   end
-  st.level = #st.chain
-  apply(st)
+  ensure_manual_folds()
+  while st.level < #st.chain do
+    st.level = st.level + 1
+    create_fold(st.chain[st.level])
+  end
+  restore_cursor(st)
 end
 
--- Zoom in one level.
+-- Zoom in one level: delete the outermost fold of the current zoom.
+-- Elsewhere (a fold made earlier, or after an edit) open the closed fold under
+-- the cursor; nested folds inside it stay.
 function M.unfold_next()
-  local st = STATE[vim.api.nvim_get_current_buf()]
-  if not st or st.level == 0 then
-    clear_folds()
+  local buf = vim.api.nvim_get_current_buf()
+  local st = STATE[buf]
+  if still_valid(st, buf) and st.level > 0 then
+    delete_fold(st.chain[st.level])
+    st.level = st.level - 1
+    restore_cursor(st)
     return
   end
-  st.level = st.level - 1
-  apply(st)
+  if vim.fn.foldclosed(cursor_line()) ~= -1 then
+    pcall(vim.cmd, "normal! zd")
+  end
 end
 
--- Open everything.
+-- Open everything in the buffer.
 function M.unfold_all()
-  local st = STATE[vim.api.nvim_get_current_buf()]
-  if st then
-    st.level = 0
-  end
-  clear_folds()
+  STATE[vim.api.nvim_get_current_buf()] = nil
+  pcall(vim.cmd, "normal! zE")
 end
 
 -- opts.cmd       list, command that runs Curate (default: repo .venv, else PATH)
