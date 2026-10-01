@@ -99,7 +99,8 @@ Parsing dominates. Process start-up adds about 40 ms per call from the editor.
   decides what to show rather than what to hide, and scope-aware retrieval
   for RAG.
 
-See [docs/VISION.md](docs/VISION.md) for the longer picture and
+See [docs/DESIGN.md](docs/DESIGN.md) for how the core works,
+[docs/VISION.md](docs/VISION.md) for the longer picture and
 [docs/PITFALLS.md](docs/PITFALLS.md) for editor hazards found along the way.
 
 ## License

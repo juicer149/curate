@@ -1,4 +1,4 @@
-# Curate
+# Curate — core design
 
 Curate is a small core library for deriving **structural hierarchy**
 from unstructured or semi-structured sources.
@@ -304,6 +304,9 @@ Examples:
 * children
 * ancestors
 * descendants
+* `at(scopes, line)`: the deepest scope containing a line
+* `chain(scopes, line)`: every scope containing a line, innermost first
+  (what the Neovim adapter folds, level by level)
 
 All relations are derived solely from:
 
@@ -335,20 +338,22 @@ Defined in `producers/`.
 Producer contract:
 
 * emit `RawFactSet`
-* must never raise
 * may return empty results
 * do not assign structure
 * do not inject roots
 
-Examples (outside Curate core):
+Producers may fail (a missing grammar, say). `compile_scopes` catches
+the error, reports it through `on_error`, and falls back to no facts,
+so compilation itself is total.
 
-* Tree-sitter adapters
-* regex-based scanners
-* AST adapters
-* domain-specific extractors
+Included:
 
-The included `noop` producer emits no facts
-and serves as a guaranteed fallback.
+* `treesitter` — a `LanguageSpec` maps node types to scope labels
+  (Python first); tree-sitter is imported lazily
+* `noop` — emits no facts; the guaranteed fallback
+
+Other producers (regex scanners, AST adapters, domain extractors)
+plug into the same registry.
 
 ---
 
@@ -421,7 +426,7 @@ without knowing *why* those consumers exist.
 
 ## Status
 
-This repository contains the **core structural model**.
-
-All adapters (filesystem ingestion, Tree-sitter integration,
-editor tooling, AI tooling) are expected to live in separate packages.
+The core, the tree-sitter producer, the `curate chain` CLI and the
+Neovim adapter (`adapters/nvim`) live in this repository. Filesystem
+ingestion and AI context selection are planned layers on top; see
+[VISION.md](VISION.md).
