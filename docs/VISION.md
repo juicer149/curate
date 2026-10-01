@@ -200,33 +200,34 @@ the starting point for this step.
 
 ---
 
-### v3 — Generic language backends
+### v3 — More languages, and a fallback
 
-Introduce heuristic backends for non-Python files:
+Tree-sitter turned out to be the right backend from the start, so the
+original plan (heuristic backends first, real parsers later) collapsed into
+one step: a language is a file in `producers/treesitter/languages/`.
 
-| Type | Strategy |
-|----|---------|
-| YAML | indentation |
-| JSON | braces |
-| Unknown | indentation-only |
+- HTML, CSS, JavaScript, JSON, YAML as language files
+- injections: JavaScript in `<script>`, CSS in `<style>`, code blocks in
+  Markdown, parsed with their own grammar
+- an indentation-only producer for files with no grammar, so every file has
+  some structure
 
-These backends prioritize:
-
-- speed
-- predictability
-- correctness over completeness
+The engine interface does not change; only producers are added.
 
 ---
 
-### v4 — Full multi-language support
+### v4 — Structure as context
 
-Replace heuristics with proper parsers:
+The same scopes that fold a file can choose what a reader, human or model,
+needs to see.
 
-- Tree-sitter
-- language-native ASTs
-
-The engine interface does not change.  
-Only the backend does.
+- a summary per scope: name plus first docstring line or sentence
+  (first shown in fold text)
+- context selection for RAG: the scope at hand in full, its ancestors as
+  names and summaries, siblings as names only
+- workspace addresses from v2, so a scope is addressable across a project
+- a long-running process holding parsed trees, when per-call start-up
+  starts to matter
 
 ---
 
