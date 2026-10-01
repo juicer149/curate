@@ -22,6 +22,7 @@ dependencies = []
 treesitter = [
   "tree-sitter>=0.25",
   "tree-sitter-python>=0.25",
+  "tree-sitter-markdown>=0.5",
 ]
 dev = [
   "pytest",
