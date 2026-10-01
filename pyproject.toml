@@ -19,6 +19,9 @@ authors = [
 ]
 readme = "README.md"
 
+[project.scripts]
+curate = "curate.__main__:main"
+
 # ============================================================
 # Packaging (src-layout)
 # ============================================================

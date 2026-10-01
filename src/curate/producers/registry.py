@@ -36,4 +36,11 @@ def _noop() -> Producer:
     return build_raw_facts
 
 
+def _treesitter() -> Producer:
+    from .treesitter import build_raw_facts
+
+    return build_raw_facts
+
+
 PRODUCERS.setdefault("noop", _noop)
+PRODUCERS.setdefault("treesitter", _treesitter)
