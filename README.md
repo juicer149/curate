@@ -139,8 +139,11 @@ Tree-sitter producer on generated Python, one process, `make bench`:
 | 1 000   | 159    | 7 ms     | 0.4 ms | 0.01 ms| 7 ms   |
 | 10 000  | 1 549  | 66 ms    | 4 ms   | 0.06 ms| 70 ms  |
 | 100 000 | 15 459 | 890 ms   | 47 ms  | 0.9 ms | 0.93 s |
+| 1 000 000 | 154 832 | 10.4 s | 0.52 s | 12 ms | 10.9 s |
 
-Parsing dominates. Process start-up adds about 40 ms per call from the editor.
+Parsing dominates, and every column grows linearly up to a million lines
+(`make bench-huge` adds that row). Process start-up adds about 40 ms per
+call from the editor.
 
 ## Status
 

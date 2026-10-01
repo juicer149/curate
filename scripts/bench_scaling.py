@@ -92,13 +92,15 @@ def best_of(fn, runs: int) -> tuple[float, object]:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--producer", default="treesitter", choices=("treesitter", "ast"))
+    ap.add_argument("--huge", action="store_true", help="also run 1 000 000 lines (~10 s)")
     args = ap.parse_args()
+    sizes = SIZES + ((1_000_000,) if args.huge else ())
 
     produce = ast_producer if args.producer == "ast" else PRODUCERS["treesitter"]()
 
-    print(f"producer: {args.producer}  (best of 5, 1 run at 100k lines)\n")
+    print(f"producer: {args.producer}  (best of 5; 1 run from 100k lines)\n")
     print(f"{'lines':>8} {'scopes':>7} {'producer':>10} {'curate':>10} {'chain':>9} {'total':>10}")
-    for n in SIZES:
+    for n in sizes:
         src = generate(n)
         lines = src.count("\n")
         runs = 5 if n <= 10_000 else 1

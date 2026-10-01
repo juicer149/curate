@@ -2,7 +2,7 @@
 # Curate — minimal developer Makefile
 # ============================================================
 
-.PHONY: help venv install test test-nvim bench clean
+.PHONY: help venv install test test-nvim bench bench-huge clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -20,6 +20,7 @@ help:
 	@echo "  make test      Run pytest suite"
 	@echo "  make test-nvim Run the Neovim adapter tests (headless)"
 	@echo "  make bench     Time producer, curation and chain at 100 to 100k lines"
+	@echo "  make bench-huge  The same, plus 1M lines (~10 s)"
 	@echo "  make clean     Remove caches and build artifacts"
 	@echo ""
 
@@ -52,6 +53,9 @@ test-nvim:
 
 bench:
 	$(PYTHON) scripts/bench_scaling.py
+
+bench-huge:
+	$(PYTHON) scripts/bench_scaling.py --huge
 
 # ------------------------------------------------------------
 # Cleanup
