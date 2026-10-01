@@ -1,5 +1,0 @@
-describe("busted smoke", function()
-  it("runs a simple truth", function()
-    assert.is_true(true)
-  end)
-end)

@@ -2,7 +2,7 @@
 # Curate — minimal developer Makefile
 # ============================================================
 
-.PHONY: help venv install test clean
+.PHONY: help venv install test bench clean
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -18,6 +18,7 @@ help:
 	@echo "  make venv      Create virtual environment"
 	@echo "  make install   Install project in editable mode (dev extras)"
 	@echo "  make test      Run pytest suite"
+	@echo "  make bench     Time producer, curation and chain at 100 to 100k lines"
 	@echo "  make clean     Remove caches and build artifacts"
 	@echo ""
 
@@ -30,14 +31,21 @@ venv:
 	$(PIP) install --upgrade pip setuptools wheel
 
 install: venv
-	$(PIP) install -e ".[dev]"
+	$(PIP) install -e ".[dev,treesitter]"
 
 # ------------------------------------------------------------
 # Testing
 # ------------------------------------------------------------
 
 test:
-	$(PYTEST)
+	$(PYTEST) -q src/curate/tests
+
+# ------------------------------------------------------------
+# Benchmark
+# ------------------------------------------------------------
+
+bench:
+	$(PYTHON) scripts/bench_scaling.py
 
 # ------------------------------------------------------------
 # Cleanup
