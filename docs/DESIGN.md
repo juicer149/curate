@@ -317,8 +317,9 @@ Properties:
 
 * pure functions
 * no mutation
-* no indexes
 * no caching
+* no indexes of their own; `ScopeSet` keeps one, address → scope,
+  built once, so `parent`, `children` and `ancestors` cost O(1) per step
 
 Some relation helpers rely on core invariants
 (e.g. contiguous sibling indices).

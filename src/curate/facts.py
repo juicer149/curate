@@ -22,8 +22,8 @@ The distinction between raw facts and scopes is fundamental:
     scopes represent structure.
 """
 
-from dataclasses import dataclass
-from typing import Iterable, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, Iterable, Tuple
 
 from .geometry import Span
 from .address import Address
@@ -139,22 +139,24 @@ class ScopeSet:
         undefined behavior for relation helpers.
 
     Notes:
-        This type intentionally avoids indexing or caching.
-        Consumers requiring faster lookup are expected to
-        build derived indexes externally, while preserving
-        these invariants.
+        One index is built at construction: address -> scope, so
+        by_address (and with it parent, children and ancestors) is
+        O(1) per lookup instead of a scan. It is derived from
+        `scopes`, never part of equality, and adds no new truth.
+        Other indexes are left to consumers.
     """
 
     scopes: Tuple[Scope, ...]
+    _by_address: Dict[Address, Scope] = field(
+        init=False, repr=False, compare=False, hash=False
+    )
+
+    def __post_init__(self) -> None:
+        index: Dict[Address, Scope] = {}
+        for s in self.scopes:
+            index.setdefault(s.address, s)  # first wins, as a scan would
+        object.__setattr__(self, "_by_address", index)
 
     def by_address(self, addr: Address) -> Scope | None:
-        """
-        Return the Scope with the given address, if present.
-
-        This is a linear scan by design. Indexing and caching
-        are expected to be handled outside the core model.
-        """
-        for s in self.scopes:
-            if s.address == addr:
-                return s
-        return None
+        """Return the Scope with the given address, if present. O(1)."""
+        return self._by_address.get(addr)

@@ -24,3 +24,32 @@ def test_relations_on_demo() -> None:
 
     # Parent utility works
     assert parent(ss, A) == root
+
+
+def test_by_address_is_an_index_not_part_of_equality():
+    from curate import Address, RawFact, Span
+    from curate.curation import curate
+
+    a = curate([RawFact("f", Span(1, 5)), RawFact("g", Span(2, 3))])
+    b = curate([RawFact("f", Span(1, 5)), RawFact("g", Span(2, 3))])
+    assert a == b
+    assert a.by_address(Address((0, 0))).label == "g"
+    assert a.by_address(Address((9,))) is None
+
+
+def test_walking_a_large_tree_is_linear():
+    # 3 000 siblings: with a scanning by_address, children() alone would be
+    # ~9 million comparisons; with the index it is a few thousand lookups.
+    import time
+
+    from curate import RawFact, Span
+    from curate.curation import curate
+    from curate.relations import children, parent
+
+    ss = curate([RawFact("f", Span(i * 2 + 1, i * 2 + 1)) for i in range(3000)])
+    root = ss.scopes[0]
+    t = time.perf_counter()
+    kids = children(ss, root)
+    assert all(parent(ss, k) == root for k in kids)
+    assert len(kids) == 3000
+    assert time.perf_counter() - t < 0.5
