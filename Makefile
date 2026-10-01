@@ -58,11 +58,7 @@ bench:
 # ------------------------------------------------------------
 
 clean:
-	find . -type f -name '*.pyc' -delete
-	find . -type d -name '__pycache__' -exec rm -rf {} +
-	find . -type d -name '.pytest_cache' -exec rm -rf {} +
-	find . -type d -name '.coverage' -exec rm -rf {} +
-	find . -type d -name 'htmlcov' -exec rm -rf {} +
-	find . -type d -name 'build' -exec rm -rf {} +
-	find . -type d -name 'dist' -exec rm -rf {} +
-	find . -type d -name '*.egg-info' -exec rm -rf {} +
+	find . -path ./.venv -prune -o -path ./.git -prune -o -type d \( \
+		-name __pycache__ -o -name .pytest_cache -o -name htmlcov -o \
+		-name build -o -name dist -o -name '*.egg-info' \) -exec rm -rf {} + 2>/dev/null || true
+	rm -f .coverage
