@@ -27,11 +27,13 @@ help:
 # Environment
 # ------------------------------------------------------------
 
-venv:
+venv: $(PYTHON)
+
+$(PYTHON):
 	python3 -m venv $(VENV)
 	$(PIP) install --upgrade pip setuptools wheel
 
-install: venv
+install: $(PYTHON)
 	$(PIP) install -e ".[dev,treesitter]"
 
 # ------------------------------------------------------------
