@@ -29,19 +29,20 @@ class Order:
                 total += line.quantity * line.unit_price * 0.1
         return total
 
+    @property
     def total(self) -> float:
         net = self.subtotal() - self.discounts()
         return round(net * (1 + TAX_RATE), 2)
+
+    @classmethod
+    def from_rows(cls, rows: list[str]) -> "Order":
+        order = cls()
+        for row in rows:
+            line = parse_line(row)
+            order.add(line.sku, line.quantity, line.unit_price)
+        return order
 
 
 def parse_line(text: str) -> Line:
     sku, quantity, price = text.split(",")
     return Line(sku.strip(), int(quantity), float(price))
-
-
-def load_order(rows: list[str]) -> Order:
-    order = Order()
-    for row in rows:
-        line = parse_line(row)
-        order.add(line.sku, line.quantity, line.unit_price)
-    return order
