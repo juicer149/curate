@@ -105,8 +105,8 @@ require("curate_view").setup()
 
 | Key          | Action                                   |
 |--------------|------------------------------------------|
-| `<leader>f`  | fold the next enclosing scope            |
-| `<leader>F`  | fold the function at the cursor; pressed again, its class; elsewhere, or at the outermost scope, fold the file to its outline; on the outline, toggle classes folded whole |
+| `<leader>f`  | fold the next enclosing scope (nothing outside a scope) |
+| `<leader>F`  | fold the file to its outline; pressed again, classes fold whole too |
 | `<leader>u`  | unfold one level                         |
 | `<leader>U`  | unfold everything (`zE`)                 |
 

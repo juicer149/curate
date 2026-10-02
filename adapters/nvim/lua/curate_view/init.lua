@@ -7,9 +7,10 @@
 --     -> chain of scopes, innermost first
 --     -> one manual fold over chain[level]
 --
--- <leader>F folds the function at the cursor, or else the whole file down to
--- its outline (`curate outline`): functions one line each, classes showing
--- their methods, every Markdown heading visible.
+-- <leader>f and <leader>u work on the scopes around the cursor; <leader>F and
+-- <leader>U on the whole file. <leader>F folds the file down to its outline
+-- (`curate outline`): functions one line each, classes showing their methods,
+-- every Markdown heading visible; pressed again, classes fold whole too.
 --
 -- Curate knows nothing about Neovim; this file knows nothing about Tree-sitter.
 -- The chain is cached per buffer and changedtick: only the first keypress at a
@@ -359,6 +360,7 @@ function M.fold_next()
   if not st then
     return
   end
+  OUTLINED[vim.api.nvim_get_current_buf()] = nil
   if #st.chain == 0 then
     notify("no enclosing scope here")
     return
@@ -406,42 +408,11 @@ function M.outline(closed)
   end
 end
 
--- Inside a function or method: fold it, as the outline shows it (zooming
--- through the scopes on the way, so <leader>u steps back in).
--- Pressed again inside a class: fold the whole class, as repeated
--- <leader>f does in the end.
--- Anywhere else, or pressed again at the outermost scope: the outline of the
--- whole file; pressed on that outline, classes fold whole too, and the next
--- press opens them again.
+-- The whole file, wherever the cursor is: its outline (functions one line
+-- each, classes showing their methods, every Markdown heading visible).
+-- Pressed on that outline: every entry folded whole, a class is one line too;
+-- pressed again, back to the outline.
 function M.fold_max()
-  local st = current_state()
-  if not st then
-    return
-  end
-
-  -- The outermost scope at the cursor that the outline folds whole.
-  local target = 0
-  for i, s in ipairs(st.chain) do
-    if s.outline == "closed" then
-      target = i
-    end
-  end
-
-  -- Already zoomed (F pressed before): on to the outermost scope.
-  if target <= st.level and st.level > 0 then
-    target = #st.chain
-  end
-
-  if target > st.level then
-    ensure_manual_folds()
-    while st.level < target do
-      st.level = st.level + 1
-      create_fold(st.chain[st.level])
-    end
-    restore_cursor(st)
-    return
-  end
-
   local buf = vim.api.nvim_get_current_buf()
   local o = OUTLINED[buf]
   local on_outline = o ~= nil and o.tick == vim.api.nvim_buf_get_changedtick(buf)
@@ -488,7 +459,7 @@ function M.setup(opts)
   if CONFIG.keymaps then
     local descs = {
       fold_next = "Curate: zoom out one scope",
-      fold_max = "Curate: fold this function, then its class, then outline the file",
+      fold_max = "Curate: outline the file; again: classes folded too",
       unfold_next = "Curate: zoom in one scope",
       unfold_all = "Curate: unfold all",
     }
