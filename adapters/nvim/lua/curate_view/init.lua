@@ -69,9 +69,14 @@ CONFIG.cmd = default_cmd()
 
 local STATE = {}
 
+-- OUTLINED[buf] = { tick = changedtick, closed = bool }: the outline last
+-- applied, so F on the outline can switch between open and closed classes.
+local OUTLINED = {}
+
 vim.api.nvim_create_autocmd("BufWipeout", {
   callback = function(args)
     STATE[args.buf] = nil
+    OUTLINED[args.buf] = nil
   end,
 })
 
@@ -370,14 +375,19 @@ end
 
 -- Fold the whole file down to its outline: functions as one line each,
 -- classes and Markdown headings visible with their contents folded.
+-- closed = true folds every entry whole instead: a class is one line too.
 -- Replaces the folds in the window.
-function M.outline()
+function M.outline(closed)
   local buf = vim.api.nvim_get_current_buf()
   local language = buffer_language(buf)
   if not language then
     return
   end
-  local data = run(buf, { "outline", "-", "--language", language })
+  local args = { "outline", "-", "--language", language }
+  if closed then
+    table.insert(args, "--closed")
+  end
+  local data = run(buf, args)
   if not data or type(data.folds) ~= "table" then
     return
   end
@@ -386,6 +396,7 @@ function M.outline()
   ensure_manual_folds()
   pcall(vim.cmd, "normal! zE")
   STATE[buf] = nil
+  OUTLINED[buf] = { tick = vim.api.nvim_buf_get_changedtick(buf), closed = closed == true }
   for _, f in ipairs(data.folds) do
     create_fold(fold_from_head(f))
   end
@@ -400,7 +411,8 @@ end
 -- Pressed again inside a class: fold the whole class, as repeated
 -- <leader>f does in the end.
 -- Anywhere else, or pressed again at the outermost scope: the outline of the
--- whole file.
+-- whole file; pressed on that outline, classes fold whole too, and the next
+-- press opens them again.
 function M.fold_max()
   local st = current_state()
   if not st then
@@ -430,7 +442,10 @@ function M.fold_max()
     return
   end
 
-  M.outline()
+  local buf = vim.api.nvim_get_current_buf()
+  local o = OUTLINED[buf]
+  local on_outline = o ~= nil and o.tick == vim.api.nvim_buf_get_changedtick(buf)
+  M.outline(on_outline and not o.closed)
 end
 
 -- Zoom in one level: delete the outermost fold of the current zoom.
@@ -453,6 +468,7 @@ end
 -- Open everything in the buffer.
 function M.unfold_all()
   STATE[vim.api.nvim_get_current_buf()] = nil
+  OUTLINED[vim.api.nvim_get_current_buf()] = nil
   pcall(vim.cmd, "normal! zE")
 end
 

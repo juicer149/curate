@@ -97,8 +97,11 @@ case("F: fold the function, then the outline", function(check)
   at(16); cv.fold_max(); cv.fold_max(); check("F F: outline", "7-19 23-24")
 end)
 
-case("F outside functions gives the outline", function(check)
+case("F outside functions gives the outline, then closed classes", function(check)
   at(20); cv.fold_max(); check("F on a blank line", "7-19 23-24")
+  at(20); cv.fold_max(); check("F again: classes fold whole", "7-19 22-24")
+  at(20); cv.fold_max(); check("F again: classes open", "7-19 23-24")
+  cv.unfold_all()
   at(22); cv.fold_max(); check("F on the class line", "7-19 23-24")
 end)
 

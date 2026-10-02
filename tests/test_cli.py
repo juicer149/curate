@@ -120,6 +120,15 @@ def test_outline_python_fixture(capsys):
 
 
 @pytest.mark.treesitter
+def test_outline_closed_folds_classes_whole(capsys):
+    pytest.importorskip("tree_sitter_python")
+    assert main(["outline", str(FIXTURE), "--closed"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "folds": [{"start": 7, "end": 19}, {"start": 22, "end": 24}],
+    }
+
+
+@pytest.mark.treesitter
 def test_outline_markdown_fixture(capsys):
     pytest.importorskip("tree_sitter_markdown")
     assert main(["outline", str(FIXTURES / "markdown_minimal.md")]) == 0

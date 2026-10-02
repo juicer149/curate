@@ -2,7 +2,7 @@
 Command-line interface for Curate.
 
     curate chain FILE --line N [--language NAME] [--producer treesitter]
-    curate outline FILE [--language NAME] [--producer treesitter]
+    curate outline FILE [--closed] [--language NAME] [--producer treesitter]
 
 `chain` prints the structural path at a line as JSON, innermost first.
 "outline" says how the scope shows in the file's outline ("open",
@@ -17,6 +17,8 @@ Command-line interface for Curate.
 (see curate.outline); they never overlap:
 
     {"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}]}
+
+With --closed every entry folds whole, so a class is one line too.
 
 A scope or fold whose naming line is not its first line also has "head"
 (a decorated definition starts at its decorator; "head" is the `def`).
@@ -119,6 +121,8 @@ def _cmd_chain(args: argparse.Namespace) -> int:
 
 def _cmd_outline(args: argparse.Namespace) -> int:
     scopes, kinds = _compile(args)
+    if args.closed:
+        kinds = {label: "closed" for label in kinds}
     # Every outline fold starts where an entry starts.
     heads = {s.span.start: s.head for s in scopes.scopes if s.head is not None}
     print(json.dumps({
@@ -145,6 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     p_outline.add_argument("file", help='source file, or "-" for stdin')
     p_outline.add_argument("--language", help="e.g. python, markdown (default: from the file suffix)")
     p_outline.add_argument("--producer", default="treesitter")
+    p_outline.add_argument(
+        "--closed",
+        action="store_true",
+        help="fold every outline entry whole (classes too: one line each)",
+    )
     p_outline.set_defaults(func=_cmd_outline)
 
     args = parser.parse_args(argv)
