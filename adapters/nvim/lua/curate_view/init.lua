@@ -204,16 +204,34 @@ local function line_chunks(buf, lnum)
   return chunks
 end
 
--- The fold text for lines start..end: its naming line as it looks in the
--- buffer (the first line, or the `def` under a decorator), then a dimmed
--- count of the lines the fold holds.
+-- Drop the indentation from a line's chunks, to continue it on another line.
+local function trim_leading(chunks)
+  while chunks[1] do
+    local text = chunks[1][1]:gsub("^%s+", "")
+    if text ~= "" then
+      chunks[1] = { text, chunks[1][2] }
+      break
+    end
+    table.remove(chunks, 1)
+  end
+  return chunks
+end
+
+-- The fold text for lines start..end: its first line as it looks in the
+-- buffer, then a dimmed count of the lines the fold holds. A fold that starts
+-- above its naming line (decorators above a `def`) shows those lines and the
+-- naming line joined on one row: `@dataclass class Order: ··· 4`.
 function M.render_fold(buf, start, finish)
   local heads = HEADS[buf]
   local head = heads and heads[start .. ":" .. finish] or start
   if head < start or head > finish then
     head = start
   end
-  local chunks = line_chunks(buf, head)
+  local chunks = line_chunks(buf, start)
+  for lnum = start + 1, head do
+    table.insert(chunks, { " ", "CurateFolded" })
+    vim.list_extend(chunks, trim_leading(line_chunks(buf, lnum)))
+  end
   table.insert(chunks, { " ··· " .. (finish - start + 1), "Comment" })
   return chunks
 end
