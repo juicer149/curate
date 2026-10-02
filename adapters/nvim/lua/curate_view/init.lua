@@ -69,15 +69,9 @@ CONFIG.cmd = default_cmd()
 
 local STATE = {}
 
--- HEADS[buf]["start:end"] = the line a fold's text shows, for folds whose
--- naming line is not their first: a decorated definition is folded from its
--- decorator, but shows its `def` or `class` line.
-local HEADS = {}
-
 vim.api.nvim_create_autocmd("BufWipeout", {
   callback = function(args)
     STATE[args.buf] = nil
-    HEADS[args.buf] = nil
   end,
 })
 
@@ -110,13 +104,18 @@ local function ensure_manual_folds()
   end
 end
 
+-- A decorated definition's scope starts at its first decorator, but its fold
+-- starts at its "head", the `def` or `class` line: the decorators stay
+-- visible above the fold, one per line, as in the source.
+local function fold_from_head(s)
+  if type(s.head) == "number" and s.head > s.start and s.head <= s["end"] then
+    s.start = s.head
+  end
+  return s
+end
+
 local function create_fold(s)
   vim.cmd(string.format("%d,%dfold", s.start, s["end"]))
-  if s.head and s.head ~= s.start then
-    local buf = vim.api.nvim_get_current_buf()
-    HEADS[buf] = HEADS[buf] or {}
-    HEADS[buf][s.start .. ":" .. s["end"]] = s.head
-  end
 end
 
 -- Delete the closed fold that starts at s.start. Nested folds stay.
@@ -204,34 +203,10 @@ local function line_chunks(buf, lnum)
   return chunks
 end
 
--- Drop the indentation from a line's chunks, to continue it on another line.
-local function trim_leading(chunks)
-  while chunks[1] do
-    local text = chunks[1][1]:gsub("^%s+", "")
-    if text ~= "" then
-      chunks[1] = { text, chunks[1][2] }
-      break
-    end
-    table.remove(chunks, 1)
-  end
-  return chunks
-end
-
--- The fold text for lines start..end: its first line as it looks in the
--- buffer, then a dimmed count of the lines the fold holds. A fold that starts
--- above its naming line (decorators above a `def`) shows those lines and the
--- naming line joined on one row: `@dataclass class Order: ··· 4`.
+-- The fold text for lines start..end: the first line as it looks in the
+-- buffer, then a dimmed count of the lines the fold holds.
 function M.render_fold(buf, start, finish)
-  local heads = HEADS[buf]
-  local head = heads and heads[start .. ":" .. finish] or start
-  if head < start or head > finish then
-    head = start
-  end
   local chunks = line_chunks(buf, start)
-  for lnum = start + 1, head do
-    table.insert(chunks, { " ", "CurateFolded" })
-    vim.list_extend(chunks, trim_leading(line_chunks(buf, lnum)))
-  end
   table.insert(chunks, { " ··· " .. (finish - start + 1), "Comment" })
   return chunks
 end
@@ -291,6 +266,7 @@ local function fetch_chain(buf, line, language)
   -- A one-line scope cannot be folded; skip it so every keypress changes the view.
   local chain = {}
   for _, s in ipairs(data.chain) do
+    fold_from_head(s)
     if s["end"] > s.start then
       table.insert(chain, s)
     end
@@ -317,8 +293,11 @@ local function still_valid(st, buf)
     return false
   end
   local line = cursor_line()
+  if line == st.anchor then
+    return true
+  end
   if st.level == 0 then
-    return line == st.anchor
+    return false
   end
   local s = st.chain[st.level]
   return line >= s.start and line <= s["end"]
@@ -407,9 +386,8 @@ function M.outline()
   ensure_manual_folds()
   pcall(vim.cmd, "normal! zE")
   STATE[buf] = nil
-  HEADS[buf] = nil
   for _, f in ipairs(data.folds) do
-    create_fold(f)
+    create_fold(fold_from_head(f))
   end
   pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
   if #data.folds == 0 then
@@ -467,7 +445,6 @@ end
 -- Open everything in the buffer.
 function M.unfold_all()
   STATE[vim.api.nvim_get_current_buf()] = nil
-  HEADS[vim.api.nvim_get_current_buf()] = nil
   pcall(vim.cmd, "normal! zE")
 end
 
