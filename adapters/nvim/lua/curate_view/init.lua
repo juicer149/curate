@@ -7,9 +7,11 @@
 --     -> chain of scopes, innermost first
 --     -> one manual fold over chain[level]
 --
--- <leader>F folds the function at the cursor, or else the whole file down to
--- its outline (`curate outline`): functions one line each, classes showing
--- their methods, every Markdown heading visible.
+-- <leader>f and <leader>u work on the scopes around the cursor; <leader>F and
+-- <leader>U on the whole file. <leader>F folds the file down to its outline
+-- (`curate outline`): functions one line each, classes showing their methods,
+-- every Markdown heading visible; pressed again, classes fold whole too.
+-- <leader>U goes back the same steps.
 --
 -- Curate knows nothing about Neovim; this file knows nothing about Tree-sitter.
 -- The chain is cached per buffer and changedtick: only the first keypress at a
@@ -63,15 +65,23 @@ CONFIG.cmd = default_cmd()
 -- STATE[buf] = {
 --   tick   = changedtick the chain was computed for,
 --   anchor = cursor line the chain was computed for,
---   chain  = { {start=, ["end"]=, label=, address=}, ... } innermost first,
+--   chain  = { {start=, ["end"]=, label=, address=}, ... } innermost first;
+--            the first step may be { group = { span, ... } }: the children
+--            of the innermost scope, folded together,
 --   level  = number of folds this zoom has created: chain[1..level] are folded,
 -- }
 
 local STATE = {}
 
+-- OUTLINED[buf] = { tick = changedtick, level = 1 | 2 }: how far F has folded
+-- the file (1: the outline, 2: classes folded whole too), so F goes one step
+-- further and U one step back.
+local OUTLINED = {}
+
 vim.api.nvim_create_autocmd("BufWipeout", {
   callback = function(args)
     STATE[args.buf] = nil
+    OUTLINED[args.buf] = nil
   end,
 })
 
@@ -115,11 +125,23 @@ local function fold_from_head(s)
 end
 
 local function create_fold(s)
+  if s.group then
+    for _, c in ipairs(s.group) do
+      create_fold(c)
+    end
+    return
+  end
   vim.cmd(string.format("%d,%dfold", s.start, s["end"]))
 end
 
 -- Delete the closed fold that starts at s.start. Nested folds stay.
 local function delete_fold(s)
+  if s.group then
+    for _, c in ipairs(s.group) do
+      delete_fold(c)
+    end
+    return
+  end
   pcall(vim.api.nvim_win_set_cursor, 0, { s.start, 0 })
   pcall(vim.cmd, "normal! zd")
 end
@@ -271,6 +293,23 @@ local function fetch_chain(buf, line, language)
       table.insert(chain, s)
     end
   end
+
+  -- Between the scopes inside the innermost one (a blank line between two
+  -- methods, a statement between two `if`s), not on its header: the first
+  -- step folds those scopes to their headers, the next folds the scope itself.
+  local inner = data.chain[1]
+  if inner and line > inner.start and type(data.children) == "table" then
+    local group = {}
+    for _, c in ipairs(data.children) do
+      fold_from_head(c)
+      if c["end"] > c.start then
+        table.insert(group, c)
+      end
+    end
+    if #group > 0 then
+      table.insert(chain, 1, { group = group, start = line, ["end"] = line })
+    end
+  end
   return chain
 end
 
@@ -354,6 +393,7 @@ function M.fold_next()
   if not st then
     return
   end
+  OUTLINED[vim.api.nvim_get_current_buf()] = nil
   if #st.chain == 0 then
     notify("no enclosing scope here")
     return
@@ -370,14 +410,19 @@ end
 
 -- Fold the whole file down to its outline: functions as one line each,
 -- classes and Markdown headings visible with their contents folded.
+-- closed = true folds every entry whole instead: a class is one line too.
 -- Replaces the folds in the window.
-function M.outline()
+function M.outline(closed)
   local buf = vim.api.nvim_get_current_buf()
   local language = buffer_language(buf)
   if not language then
     return
   end
-  local data = run(buf, { "outline", "-", "--language", language })
+  local args = { "outline", "-", "--language", language }
+  if closed then
+    table.insert(args, "--closed")
+  end
+  local data = run(buf, args)
   if not data or type(data.folds) ~= "table" then
     return
   end
@@ -386,6 +431,7 @@ function M.outline()
   ensure_manual_folds()
   pcall(vim.cmd, "normal! zE")
   STATE[buf] = nil
+  OUTLINED[buf] = { tick = vim.api.nvim_buf_get_changedtick(buf), level = closed and 2 or 1 }
   for _, f in ipairs(data.folds) do
     create_fold(fold_from_head(f))
   end
@@ -395,34 +441,26 @@ function M.outline()
   end
 end
 
--- Inside a function or method: fold it, as the outline shows it (zooming
--- through the scopes on the way, so <leader>u steps back in).
--- Anywhere else, or pressed again: the outline of the whole file.
+-- How far F has folded this buffer: 0 (not by F), 1 or 2.
+local function outline_level(buf)
+  local o = OUTLINED[buf]
+  if o and o.tick == vim.api.nvim_buf_get_changedtick(buf) then
+    return o.level
+  end
+  return 0
+end
+
+-- The whole file, wherever the cursor is, one step per press and never
+-- back (that is U): the outline (functions one line each, classes showing
+-- their methods, every Markdown heading visible), then every entry folded
+-- whole, a class is one line too.
 function M.fold_max()
-  local st = current_state()
-  if not st then
+  local level = outline_level(vim.api.nvim_get_current_buf())
+  if level >= 2 then
+    notify("the whole file is already folded")
     return
   end
-
-  -- The outermost scope at the cursor that the outline folds whole.
-  local target = 0
-  for i, s in ipairs(st.chain) do
-    if s.outline == "closed" then
-      target = i
-    end
-  end
-
-  if target > st.level then
-    ensure_manual_folds()
-    while st.level < target do
-      st.level = st.level + 1
-      create_fold(st.chain[st.level])
-    end
-    restore_cursor(st)
-    return
-  end
-
-  M.outline()
+  M.outline(level == 1)
 end
 
 -- Zoom in one level: delete the outermost fold of the current zoom.
@@ -442,9 +480,16 @@ function M.unfold_next()
   end
 end
 
--- Open everything in the buffer.
+-- F in reverse: from classes folded whole back to the outline; otherwise
+-- open everything in the buffer.
 function M.unfold_all()
-  STATE[vim.api.nvim_get_current_buf()] = nil
+  local buf = vim.api.nvim_get_current_buf()
+  if outline_level(buf) == 2 then
+    M.outline(false)
+    return
+  end
+  STATE[buf] = nil
+  OUTLINED[buf] = nil
   pcall(vim.cmd, "normal! zE")
 end
 
@@ -464,9 +509,9 @@ function M.setup(opts)
   if CONFIG.keymaps then
     local descs = {
       fold_next = "Curate: zoom out one scope",
-      fold_max = "Curate: fold this function, or outline the file",
+      fold_max = "Curate: fold the file one step (outline, then classes)",
       unfold_next = "Curate: zoom in one scope",
-      unfold_all = "Curate: unfold all",
+      unfold_all = "Curate: unfold the file one step (classes, then all)",
     }
     for action, key in pairs(CONFIG.keymaps) do
       if key and M[action] then

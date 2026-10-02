@@ -49,6 +49,7 @@ end
 
 local function case(name, fn)
   cv.unfold_all()
+  cv.unfold_all() -- twice: U steps back from classes folded whole
   fn(function(step, want) expect(name .. ": " .. step, want) end)
 end
 
@@ -90,21 +91,30 @@ case("no scope on a blank line", function(check)
   at(20); cv.fold_next(); check("f between functions", "")
 end)
 
-case("F: fold the function, then the outline", function(check)
-  at(16); cv.fold_max(); check("F inside top(): fold top()", "7-19")
-  cv.unfold_next(); check("u steps back in to the if", "15-17")
+case("F gives the outline wherever the cursor is", function(check)
+  at(16); cv.fold_max(); check("F inside top()", "7-19 23-24")
   cv.unfold_all()
-  at(16); cv.fold_max(); cv.fold_max(); check("F F: outline", "7-19 23-24")
-end)
-
-case("F outside functions gives the outline", function(check)
+  at(24); cv.fold_max(); check("F inside m()", "7-19 23-24")
+  cv.unfold_all()
   at(20); cv.fold_max(); check("F on a blank line", "7-19 23-24")
-  at(22); cv.fold_max(); check("F on the class line", "7-19 23-24")
 end)
 
-case("F in a method folds the method, not the class", function(check)
-  at(24); cv.fold_max(); check("F in m()", "23-24")
-  cv.fold_max(); check("F again: outline", "7-19 23-24")
+case("F folds one step further, U one step back", function(check)
+  at(20); cv.fold_max(); check("F: outline", "7-19 23-24")
+  at(24); cv.fold_max(); check("F again, anywhere: classes fold whole", "7-19 22-24")
+  cv.fold_max(); check("F at the top: unchanged", "7-19 22-24")
+  cv.unfold_all(); check("U: back to the outline", "7-19 23-24")
+  cv.unfold_all(); check("U again: everything open", "")
+end)
+
+case("f between the scopes inside a function", function(check)
+  at(14); cv.fold_next(); check("f on the blank line in top(): its scopes", "11-13 15-17")
+  cv.fold_next(); check("f again: top() itself", "7-19")
+  cv.unfold_next(); check("u: back to its scopes", "11-13 15-17")
+  cv.unfold_next(); check("u: nothing folded", "")
+  at(9); cv.fold_next(); check("f on a statement between them", "11-13 15-17")
+  cv.unfold_all()
+  at(7); cv.fold_next(); check("f on the def line: the function", "7-19")
 end)
 
 case("outline replaces earlier folds and u opens one", function(check)
