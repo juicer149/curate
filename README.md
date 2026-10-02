@@ -5,10 +5,46 @@
 Structural view of code and documents: turn a file into a tree of nested scopes,
 then let tools ask "where am I?" and act on the answer.
 
-The first consumer is Neovim folding. Put the cursor anywhere, press a key,
-and the enclosing scope folds. Press again and the next scope out folds.
-Or fold the whole file down to its outline: function and class lines in
-Python, every heading in Markdown.
+The first consumer is Neovim: fold and navigate a file by its structure.
+Zoom out from the cursor one scope at a time, fold the whole file level by
+level (functions, then classes; or `###`, then `##`), and jump between the
+definitions or headings that are visible. Python and Markdown for now.
+
+## Quick start (Neovim)
+
+Needs Neovim 0.10+ and Python 3.10+. Neovim's own tree-sitter parsers are not
+needed: curate parses with tree-sitter on the Python side.
+
+1. Clone and install. This creates `.venv` inside the repo, and the plugin
+   finds it on its own:
+
+   ```sh
+   git clone https://github.com/juicer149/curate ~/src/curate
+   cd ~/src/curate
+   make install
+   ```
+
+2. Add the plugin. With [lazy.nvim](https://github.com/folke/lazy.nvim):
+
+   ```lua
+   {
+     dir = "~/src/curate/adapters/nvim",
+     name = "curate_view",
+     config = function()
+       require("curate_view").setup()
+     end,
+   }
+   ```
+
+   Without a plugin manager:
+
+   ```lua
+   vim.opt.rtp:append("~/src/curate/adapters/nvim")
+   require("curate_view").setup()
+   ```
+
+3. Open a `.py` or `.md` file and press `<leader>F` for its outline.
+   The [keys](#keys) are below.
 
 ```
 source ──► producer ──► RawFact(label, span) ──► curate() ──► ScopeSet ──► consumer
@@ -23,7 +59,7 @@ source ──► producer ──► RawFact(label, span) ──► curate() ─�
 - **Consumers** ask questions such as `chain(scopes, line)`: every scope that
   contains a line, innermost first.
 
-## Install
+## Install (CLI and library)
 
 ```sh
 git clone https://github.com/juicer149/curate
@@ -101,13 +137,10 @@ without touching the plugin.
 
 ## Neovim
 
-The plugin lives in the repo, in `adapters/nvim`. Add it to the runtime path
-and call `setup`:
+The plugin lives in the repo, in `adapters/nvim`; see
+[Quick start](#quick-start-neovim) to install it.
 
-```lua
-vim.opt.rtp:append("~/path/to/curate/adapters/nvim")
-require("curate_view").setup()
-```
+### Keys
 
 Lowercase keys work on the scopes around the cursor, uppercase keys on the
 whole file:
@@ -142,19 +175,53 @@ Folds are ordinary manual folds owned by Neovim, so `za`, `zo` and friends keep
 working, and several folds can exist at once. A closed fold shows its first
 line with the buffer's own highlighting and a dimmed count of the lines it
 holds, e.g. `def add(self, item): ··· 9`, without the colorscheme's `Folded`
-background. To get that back: `:hi link CurateFolded Folded`. The plugin uses
-`<repo>/.venv/bin/curate` when it exists and `curate` on `PATH` otherwise.
+background. To get that back: `:hi link CurateFolded Folded`.
 
-Options:
+### Changing keys
+
+`keymaps` is merged with the defaults, so name only the keys you change.
+`false` drops one key; `keymaps = false` sets none, and you map the functions
+yourself:
 
 ```lua
 require("curate_view").setup({
-  cmd = { "curate" },          -- command prefix
+  keymaps = {
+    next_head = "]]",   -- instead of <leader>j
+    prev_head = "[[",   -- instead of <leader>k
+    unfold_all = false, -- no key for this one
+  },
+})
+
+-- or, with keymaps = false:
+local curate = require("curate_view")
+vim.keymap.set("n", "<leader>f", curate.fold_next)   -- zoom out
+vim.keymap.set("n", "<leader>u", curate.unfold_next) -- zoom in
+vim.keymap.set("n", "<leader>F", curate.fold_max)    -- fold the file one level
+vim.keymap.set("n", "<leader>U", curate.unfold_all)  -- unfold the file one level
+vim.keymap.set("n", "<leader>j", curate.next_head)   -- next def, class or heading
+vim.keymap.set("n", "<leader>k", curate.prev_head)   -- previous one
+```
+
+### Other options
+
+```lua
+require("curate_view").setup({
+  cmd = { "curate" },                -- default: <repo>/.venv/bin/curate if it exists, else curate on PATH
   languages = { mdx = "markdown" },  -- only filetypes Curate does not know by name
-  foldtext = false,            -- keep your own 'foldtext' (default: true)
-  keymaps = false,             -- or a table overriding the defaults
+  foldtext = false,                  -- keep your own 'foldtext' (default: true)
 })
 ```
+
+### When nothing happens
+
+Messages start with `curate:`.
+
+- `could not run …`: the command was not found. Run `make install` in the
+  repo so that `.venv/bin/curate` exists, or set `cmd`.
+- `no structure support for language '…'`: the buffer's filetype is not a
+  language curate knows (`:set filetype?`). Map it with `languages`.
+- `no enclosing scope here`: `<leader>f` outside every scope; there is
+  nothing around the cursor to fold.
 
 Run the headless tests with `make test-nvim`.
 
@@ -176,7 +243,8 @@ call from the editor.
 ## Status
 
 - Languages: Python, Markdown.
-- Neovim: zoom folding, outline, fold text.
+- Neovim: zoom folding from the cursor, outline levels for the whole file,
+  jumps between definitions and headings, fold text that keeps decorators.
 - Next: more languages (HTML, CSS, JavaScript, JSON, YAML), a docstring or
   first-paragraph summary in the fold text, a visibility plan that decides
   what to show rather than what to hide, and scope-aware retrieval for RAG.
