@@ -397,7 +397,10 @@ end
 
 -- Inside a function or method: fold it, as the outline shows it (zooming
 -- through the scopes on the way, so <leader>u steps back in).
--- Anywhere else, or pressed again: the outline of the whole file.
+-- Pressed again inside a class: fold the whole class, as repeated
+-- <leader>f does in the end.
+-- Anywhere else, or pressed again at the outermost scope: the outline of the
+-- whole file.
 function M.fold_max()
   local st = current_state()
   if not st then
@@ -410,6 +413,11 @@ function M.fold_max()
     if s.outline == "closed" then
       target = i
     end
+  end
+
+  -- Already zoomed (F pressed before): on to the outermost scope.
+  if target <= st.level and st.level > 0 then
+    target = #st.chain
   end
 
   if target > st.level then
@@ -464,7 +472,7 @@ function M.setup(opts)
   if CONFIG.keymaps then
     local descs = {
       fold_next = "Curate: zoom out one scope",
-      fold_max = "Curate: fold this function, or outline the file",
+      fold_max = "Curate: fold this function, then its class, then outline the file",
       unfold_next = "Curate: zoom in one scope",
       unfold_all = "Curate: unfold all",
     }
