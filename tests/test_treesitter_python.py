@@ -45,6 +45,7 @@ def test_decorated_function_starts_at_decorator():
     assert [(s.label, s.span.start, s.span.end) for s in ss.scopes if s.label != "root"] == [
         ("function", 1, 3),
     ]
+    assert [s.head_line for s in ss.scopes if s.label != "root"] == [2]
 
 
 def test_unknown_language_yields_only_root():

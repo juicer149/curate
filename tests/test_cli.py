@@ -92,6 +92,25 @@ def test_chain_reports_outline_kind(capsys):
 
 
 @pytest.mark.treesitter
+def test_decorated_definitions_report_their_head(monkeypatch, capsys):
+    pytest.importorskip("tree_sitter_python")
+    src = "@dataclass\nclass A:\n    x: int\n\n    def m(self):\n        pass\n"
+    monkeypatch.setattr("sys.stdin", io.StringIO(src))
+    assert main(["outline", "-", "--language", "python"]) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "folds": [{"start": 1, "end": 4, "head": 2}, {"start": 5, "end": 6}],
+    }
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(src))
+    assert main(["chain", "-", "--line", "6", "--language", "python"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [(c["label"], c["start"], c.get("head")) for c in out["chain"]] == [
+        ("function", 5, None),
+        ("class", 1, 2),
+    ]
+
+
+@pytest.mark.treesitter
 def test_outline_python_fixture(capsys):
     pytest.importorskip("tree_sitter_python")
     assert main(["outline", str(FIXTURE)]) == 0

@@ -23,7 +23,7 @@ The distinction between raw facts and scopes is fundamental:
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 from .geometry import Span
 from .address import Address
@@ -49,10 +49,16 @@ class RawFact:
     Invariants:
         - Span is valid geometry
         - No address or hierarchy is attached
+
+    head:
+        The line where the scope's own syntax begins, when the span
+        starts earlier: a decorated Python function spans its decorators,
+        but its head is the `def` line. None means span.start.
     """
 
     label: str
     span: Span
+    head: Optional[int] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +117,12 @@ class Scope:
     address: Address
     label: str
     span: Span
+    head: Optional[int] = None
+
+    @property
+    def head_line(self) -> int:
+        """The line that names this scope (see RawFact.head)."""
+        return self.span.start if self.head is None else self.head
 
 
 @dataclass(frozen=True, slots=True)

@@ -51,11 +51,12 @@ def collect_facts(
 
         if name is not None:
             start, end = line_span(node)
+            head: Optional[int] = None
             if forced_start is not None and forced_start < start:
-                start = forced_start
+                head, start = start, forced_start
             if label is not None:
                 name = label(node, name)
-            facts.append(RawFact(name, Span(start, end)))
+            facts.append(RawFact(name, Span(start, end), head))
 
         child_forced: Optional[int] = None
         if node.type in wrapper_types:

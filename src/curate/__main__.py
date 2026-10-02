@@ -18,6 +18,9 @@ Command-line interface for Curate.
 
     {"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}]}
 
+A scope or fold whose naming line is not its first line also has "head"
+(a decorated definition starts at its decorator; "head" is the `def`).
+
 Lines are 1-based and inclusive. FILE may be "-" for stdin.
 Without --language the language comes from the file suffix (.py, .md);
 stdin has no suffix, so it needs --language.
@@ -90,6 +93,11 @@ def _compile(args: argparse.Namespace) -> tuple[ScopeSet, dict[str, str]]:
     return scopes, kinds
 
 
+def _head(head: int, start: int) -> dict[str, int]:
+    """`{"head": n}` when the line naming a scope is not its first line."""
+    return {"head": head} if head != start else {}
+
+
 def _cmd_chain(args: argparse.Namespace) -> int:
     scopes, kinds = _compile(args)
     print(json.dumps({
@@ -101,6 +109,7 @@ def _cmd_chain(args: argparse.Namespace) -> int:
                 "start": s.span.start,
                 "end": s.span.end,
                 "outline": kinds.get(s.label),
+                **_head(s.head_line, s.span.start),
             }
             for s in chain(scopes, args.line)
         ],
@@ -110,8 +119,13 @@ def _cmd_chain(args: argparse.Namespace) -> int:
 
 def _cmd_outline(args: argparse.Namespace) -> int:
     scopes, kinds = _compile(args)
+    # Every outline fold starts where an entry starts.
+    heads = {s.span.start: s.head for s in scopes.scopes if s.head is not None}
     print(json.dumps({
-        "folds": [{"start": f.start, "end": f.end} for f in outline_folds(scopes, kinds)],
+        "folds": [
+            {"start": f.start, "end": f.end, **_head(heads.get(f.start, f.start), f.start)}
+            for f in outline_folds(scopes, kinds)
+        ],
     }))
     return 0
 

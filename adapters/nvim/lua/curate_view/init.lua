@@ -69,9 +69,15 @@ CONFIG.cmd = default_cmd()
 
 local STATE = {}
 
+-- HEADS[buf]["start:end"] = the line a fold's text shows, for folds whose
+-- naming line is not their first: a decorated definition is folded from its
+-- decorator, but shows its `def` or `class` line.
+local HEADS = {}
+
 vim.api.nvim_create_autocmd("BufWipeout", {
   callback = function(args)
     STATE[args.buf] = nil
+    HEADS[args.buf] = nil
   end,
 })
 
@@ -106,6 +112,11 @@ end
 
 local function create_fold(s)
   vim.cmd(string.format("%d,%dfold", s.start, s["end"]))
+  if s.head and s.head ~= s.start then
+    local buf = vim.api.nvim_get_current_buf()
+    HEADS[buf] = HEADS[buf] or {}
+    HEADS[buf][s.start .. ":" .. s["end"]] = s.head
+  end
 end
 
 -- Delete the closed fold that starts at s.start. Nested folds stay.
@@ -193,10 +204,16 @@ local function line_chunks(buf, lnum)
   return chunks
 end
 
--- The fold text for lines start..end: the first line as it looks in the
--- buffer, then a dimmed count of the lines the fold holds.
+-- The fold text for lines start..end: its naming line as it looks in the
+-- buffer (the first line, or the `def` under a decorator), then a dimmed
+-- count of the lines the fold holds.
 function M.render_fold(buf, start, finish)
-  local chunks = line_chunks(buf, start)
+  local heads = HEADS[buf]
+  local head = heads and heads[start .. ":" .. finish] or start
+  if head < start or head > finish then
+    head = start
+  end
+  local chunks = line_chunks(buf, head)
   table.insert(chunks, { " ··· " .. (finish - start + 1), "Comment" })
   return chunks
 end
@@ -372,6 +389,7 @@ function M.outline()
   ensure_manual_folds()
   pcall(vim.cmd, "normal! zE")
   STATE[buf] = nil
+  HEADS[buf] = nil
   for _, f in ipairs(data.folds) do
     create_fold(f)
   end
@@ -431,6 +449,7 @@ end
 -- Open everything in the buffer.
 function M.unfold_all()
   STATE[vim.api.nvim_get_current_buf()] = nil
+  HEADS[vim.api.nvim_get_current_buf()] = nil
   pcall(vim.cmd, "normal! zE")
 end
 
