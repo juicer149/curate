@@ -58,6 +58,21 @@ def test_decorator_line_is_part_of_the_definition():
     assert facts(tree) == [("function", 1, 5)]
 
 
+def test_decorated_definition_keeps_its_head():
+    tree = N("module", 0, 6, [
+        N("decorated_definition", 0, 6, [
+            N("decorator", 0, 0),
+            N("decorator", 1, 1),
+            N("class_definition", 2, 6, [N("function_definition", 4, 6)]),
+        ]),
+    ])
+    out = collect_facts(tree, scopes=PYTHON.scopes, wrappers=PYTHON.wrappers)
+    assert [(f.label, f.span.start, f.head) for f in out] == [
+        ("class", 1, 3),
+        ("function", 5, None),
+    ]
+
+
 def test_non_structural_nodes_emit_nothing():
     tree = N("module", 0, 2, [N("expression_statement", 0, 0), N("comment", 1, 1)])
     assert facts(tree) == []

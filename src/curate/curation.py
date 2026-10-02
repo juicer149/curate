@@ -98,6 +98,7 @@ def assign_addresses(facts: list[RawFact]) -> ScopeSet:
             address=addr,
             label=fact.label,
             span=fact.span,
+            head=fact.head,
         )
 
         scopes.append(scope)

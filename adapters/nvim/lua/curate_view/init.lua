@@ -104,6 +104,16 @@ local function ensure_manual_folds()
   end
 end
 
+-- A decorated definition's scope starts at its first decorator, but its fold
+-- starts at its "head", the `def` or `class` line: the decorators stay
+-- visible above the fold, one per line, as in the source.
+local function fold_from_head(s)
+  if type(s.head) == "number" and s.head > s.start and s.head <= s["end"] then
+    s.start = s.head
+  end
+  return s
+end
+
 local function create_fold(s)
   vim.cmd(string.format("%d,%dfold", s.start, s["end"]))
 end
@@ -256,6 +266,7 @@ local function fetch_chain(buf, line, language)
   -- A one-line scope cannot be folded; skip it so every keypress changes the view.
   local chain = {}
   for _, s in ipairs(data.chain) do
+    fold_from_head(s)
     if s["end"] > s.start then
       table.insert(chain, s)
     end
@@ -282,8 +293,11 @@ local function still_valid(st, buf)
     return false
   end
   local line = cursor_line()
+  if line == st.anchor then
+    return true
+  end
   if st.level == 0 then
-    return line == st.anchor
+    return false
   end
   local s = st.chain[st.level]
   return line >= s.start and line <= s["end"]
@@ -373,7 +387,7 @@ function M.outline()
   pcall(vim.cmd, "normal! zE")
   STATE[buf] = nil
   for _, f in ipairs(data.folds) do
-    create_fold(f)
+    create_fold(fold_from_head(f))
   end
   pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
   if #data.folds == 0 then

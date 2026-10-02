@@ -20,7 +20,8 @@ class LanguageSpec:
 
     wrappers:
         node types that wrap a scope node (e.g. Python decorators). The
-        wrapped scope's span starts at the wrapper's first line.
+        wrapped scope's span starts at the wrapper's first line; its head
+        stays on its own first line.
 
     label:
         Optional rule for languages whose label depends on more than the
