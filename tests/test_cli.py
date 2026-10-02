@@ -18,11 +18,20 @@ def test_chain_json_contract(monkeypatch, capsys):
     out = json.loads(capsys.readouterr().out)
     assert out == {
         "line": 20,
+        "children": [],
         "chain": [
             {"address": [0, 0], "label": "B", "start": 15, "end": 30, "outline": None},
             {"address": [0], "label": "A", "start": 10, "end": 50, "outline": None},
         ],
     }
+
+
+def test_chain_lists_the_children_the_line_is_between(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO("ignored"))
+    assert main(["chain", "-", "--line", "32", "--language", "demo", "--producer", "t_demo"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [c["label"] for c in out["chain"]] == ["A"]
+    assert out["children"] == [{"start": 15, "end": 30}, {"start": 35, "end": 45}]
 
 
 def test_failing_producer_exits_nonzero(monkeypatch, capsys):

@@ -4,7 +4,9 @@ Command-line interface for Curate.
     curate chain FILE --line N [--language NAME] [--producer treesitter]
     curate outline FILE [--closed] [--language NAME] [--producer treesitter]
 
-`chain` prints the structural path at a line as JSON, innermost first.
+`chain` prints the structural path at a line as JSON, innermost first,
+and the scopes directly inside the innermost one ("children"; the line
+lies between them).
 "outline" says how the scope shows in the file's outline ("open",
 "closed" or null):
 
@@ -36,9 +38,9 @@ import json
 import sys
 
 from .compile import compile_scopes
-from .facts import ScopeSet
+from .facts import Scope, ScopeSet
 from .outline import outline_folds
-from .relations import chain
+from .relations import chain, children
 
 
 def _read_source(path: str) -> str:
@@ -100,10 +102,17 @@ def _head(head: int, start: int) -> dict[str, int]:
     return {"head": head} if head != start else {}
 
 
+def _span_json(s: Scope) -> dict[str, int]:
+    return {"start": s.span.start, "end": s.span.end, **_head(s.head_line, s.span.start)}
+
+
 def _cmd_chain(args: argparse.Namespace) -> int:
     scopes, kinds = _compile(args)
+    path = chain(scopes, args.line)
     print(json.dumps({
         "line": args.line,
+        # The scopes directly inside the innermost one: the line is between them.
+        "children": [_span_json(c) for c in children(scopes, path[0])] if path else [],
         "chain": [
             {
                 "address": list(s.address.parts),
@@ -113,7 +122,7 @@ def _cmd_chain(args: argparse.Namespace) -> int:
                 "outline": kinds.get(s.label),
                 **_head(s.head_line, s.span.start),
             }
-            for s in chain(scopes, args.line)
+            for s in path
         ],
     }))
     return 0

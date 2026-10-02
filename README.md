@@ -105,10 +105,10 @@ require("curate_view").setup()
 
 | Key          | Action                                   |
 |--------------|------------------------------------------|
-| `<leader>f`  | fold the next enclosing scope (nothing outside a scope) |
-| `<leader>F`  | fold the file to its outline; pressed again, classes fold whole too |
+| `<leader>f`  | fold the next enclosing scope; between the scopes inside it, first those (nothing outside a scope) |
+| `<leader>F`  | fold the file one step: its outline, then classes whole too |
 | `<leader>u`  | unfold one level                         |
-| `<leader>U`  | unfold everything (`zE`)                 |
+| `<leader>U`  | unfold the file one step: classes back to the outline, then everything (`zE`) |
 
 Folds are ordinary manual folds owned by Neovim, so `za`, `zo` and friends keep
 working, and several folds can exist at once. A closed fold shows its first
