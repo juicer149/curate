@@ -41,7 +41,7 @@ curate chain tests/fixtures/python_minimal.py --line 16
 ```
 
 ```json
-{"line": 16, "chain": [
+{"line": 16, "children": [], "chain": [
   {"address": [0, 1], "label": "if", "start": 15, "end": 17, "outline": null},
   {"address": [0], "label": "function", "start": 7, "end": 19, "outline": "closed"}
 ]}
@@ -52,7 +52,8 @@ curate outline tests/fixtures/python_minimal.py
 ```
 
 ```json
-{"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}]}
+{"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}],
+ "level": 1, "levels": 2, "heads": [7, 11, 22, 23]}
 ```
 
 `chain` is the structural path at a line, innermost first. `outline` is the
@@ -60,7 +61,12 @@ set of line ranges to fold so that only the file's skeleton shows: functions
 fold whole, classes keep their line and show their methods, Markdown keeps
 every heading. The ranges never overlap. Each language decides which of its
 scopes are part of the outline, and `"outline"` in `chain` says how a scope
-shows there.
+shows there. `--level N` folds further, one nesting level per step (level 2
+in Python folds classes whole); `"levels"` is how many the file has and
+`"heads"` the naming line of every outline entry. `"children"` in `chain` are
+the scopes directly inside the innermost one, which the line lies between.
+A scope whose naming line is not its first (a decorated `def`) also has
+`"head"`.
 
 Lines are 1-based and inclusive. The language comes from the file suffix
 (`.py`, `.md`) unless `--language` is given; `FILE` may be `-` for stdin, which
@@ -103,12 +109,34 @@ vim.opt.rtp:append("~/path/to/curate/adapters/nvim")
 require("curate_view").setup()
 ```
 
-| Key          | Action                                   |
-|--------------|------------------------------------------|
-| `<leader>f`  | fold the next enclosing scope; between the scopes inside it, first those (nothing outside a scope) |
-| `<leader>F`  | fold the file one step: its outline, then classes whole too |
-| `<leader>u`  | unfold one level                         |
-| `<leader>U`  | unfold the file one step: classes back to the outline, then everything (`zE`) |
+Lowercase keys work on the scopes around the cursor, uppercase keys on the
+whole file:
+
+| Key          | Works on      | Action |
+|--------------|---------------|--------|
+| `<leader>f`  | the cursor    | zoom out: fold the enclosing scope, then the one around it, and so on |
+| `<leader>u`  | the cursor    | zoom back in, one scope per press |
+| `<leader>F`  | the file      | fold one level further per press: first the outline, then one nesting level at a time |
+| `<leader>U`  | the file      | unfold one level per press, back to the outline, then everything |
+| `<leader>j`  | the file      | jump to the next visible `def`, `class` or heading |
+| `<leader>k`  | the file      | jump to the previous one |
+
+**Zooming (`f`, `u`).** Inside an `if`, the first `<leader>f` folds the `if`,
+the next its function, then the class. On a line *between* the scopes inside
+one, a blank line between two methods or a statement between two `if`s, the
+first press folds those scopes to their first lines and the next folds the
+scope itself. Outside every scope, `<leader>f` does nothing. On a `def` or
+`class` line it folds that definition.
+
+**Levels (`F`, `U`).** `<leader>F` never unfolds and does not care where the
+cursor is. Its first press gives the outline: in Python, functions one line
+each and classes showing their methods; in Markdown, every heading. Each
+press after that folds one nesting level whole, from the inside out: a Python
+class becomes one line; in Markdown the `###` sections fold into their `##`,
+then the `##` into their `#`. `<leader>U` takes the same steps back.
+
+Decorators stay on their own lines above a folded definition, so
+`@dataclass` or `@login_required` is still visible.
 
 Folds are ordinary manual folds owned by Neovim, so `za`, `zo` and friends keep
 working, and several folds can exist at once. A closed fold shows its first

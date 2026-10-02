@@ -53,6 +53,8 @@ local DEFAULTS = {
     fold_max = "<leader>F",
     unfold_next = "<leader>u",
     unfold_all = "<leader>U",
+    next_head = "<leader>j",
+    prev_head = "<leader>k",
   },
 }
 
@@ -73,15 +75,20 @@ CONFIG.cmd = default_cmd()
 
 local STATE = {}
 
--- OUTLINED[buf] = { tick = changedtick, level = 1 | 2 }: how far F has folded
--- the file (1: the outline, 2: classes folded whole too), so F goes one step
--- further and U one step back.
+-- OUTLINED[buf] = { tick = changedtick, level = n, levels = n }: how far F has
+-- folded the file (1: the outline; each level more folds one nesting level:
+-- Python classes, Markdown sections) and how far it can go, so F goes one
+-- step further and U one step back.
+-- HEADLINES[buf] = { tick = changedtick, lines = { ... } }: the naming lines of
+-- the outline entries, for jumping between them.
 local OUTLINED = {}
+local HEADLINES = {}
 
 vim.api.nvim_create_autocmd("BufWipeout", {
   callback = function(args)
     STATE[args.buf] = nil
     OUTLINED[args.buf] = nil
+    HEADLINES[args.buf] = nil
   end,
 })
 
@@ -408,21 +415,25 @@ function M.fold_next()
   restore_cursor(st)
 end
 
--- Fold the whole file down to its outline: functions as one line each,
--- classes and Markdown headings visible with their contents folded.
--- closed = true folds every entry whole instead: a class is one line too.
+local function remember_heads(buf, data)
+  if type(data.heads) == "table" then
+    HEADLINES[buf] = { tick = vim.api.nvim_buf_get_changedtick(buf), lines = data.heads }
+  end
+end
+
+-- Fold the whole file down to its outline at `level` (default 1): functions
+-- as one line each, classes and Markdown headings visible with their contents
+-- folded. Each level more folds one nesting level whole: Python classes,
+-- the deepest Markdown sections into their headings, and so on.
 -- Replaces the folds in the window.
-function M.outline(closed)
+function M.outline(level)
+  level = level or 1
   local buf = vim.api.nvim_get_current_buf()
   local language = buffer_language(buf)
   if not language then
     return
   end
-  local args = { "outline", "-", "--language", language }
-  if closed then
-    table.insert(args, "--closed")
-  end
-  local data = run(buf, args)
+  local data = run(buf, { "outline", "-", "--language", language, "--level", tostring(level) })
   if not data or type(data.folds) ~= "table" then
     return
   end
@@ -431,7 +442,12 @@ function M.outline(closed)
   ensure_manual_folds()
   pcall(vim.cmd, "normal! zE")
   STATE[buf] = nil
-  OUTLINED[buf] = { tick = vim.api.nvim_buf_get_changedtick(buf), level = closed and 2 or 1 }
+  OUTLINED[buf] = {
+    tick = vim.api.nvim_buf_get_changedtick(buf),
+    level = data.level or level,
+    levels = data.levels or level,
+  }
+  remember_heads(buf, data)
   for _, f in ipairs(data.folds) do
     create_fold(fold_from_head(f))
   end
@@ -441,26 +457,26 @@ function M.outline(closed)
   end
 end
 
--- How far F has folded this buffer: 0 (not by F), 1 or 2.
+-- How far F has folded this buffer (0: not by F), and how far it can go.
 local function outline_level(buf)
   local o = OUTLINED[buf]
   if o and o.tick == vim.api.nvim_buf_get_changedtick(buf) then
-    return o.level
+    return o.level, o.levels
   end
-  return 0
+  return 0, nil
 end
 
 -- The whole file, wherever the cursor is, one step per press and never
 -- back (that is U): the outline (functions one line each, classes showing
--- their methods, every Markdown heading visible), then every entry folded
--- whole, a class is one line too.
+-- their methods, every Markdown heading visible), then one nesting level
+-- folded whole per press, until every top-level entry is one line.
 function M.fold_max()
-  local level = outline_level(vim.api.nvim_get_current_buf())
-  if level >= 2 then
+  local level, levels = outline_level(vim.api.nvim_get_current_buf())
+  if levels and level >= levels then
     notify("the whole file is already folded")
     return
   end
-  M.outline(level == 1)
+  M.outline(level + 1)
 end
 
 -- Zoom in one level: delete the outermost fold of the current zoom.
@@ -480,17 +496,76 @@ function M.unfold_next()
   end
 end
 
--- F in reverse: from classes folded whole back to the outline; otherwise
--- open everything in the buffer.
+-- F in reverse, one level per press: back towards the outline; from the
+-- outline (or any other folds) open everything in the buffer.
 function M.unfold_all()
   local buf = vim.api.nvim_get_current_buf()
-  if outline_level(buf) == 2 then
-    M.outline(false)
+  local level = outline_level(buf)
+  if level >= 2 then
+    M.outline(level - 1)
     return
   end
   STATE[buf] = nil
   OUTLINED[buf] = nil
   pcall(vim.cmd, "normal! zE")
+end
+
+-- The outline entries' naming lines (def, class, headings) for this text.
+local function head_lines(buf)
+  local h = HEADLINES[buf]
+  if h and h.tick == vim.api.nvim_buf_get_changedtick(buf) then
+    return h.lines
+  end
+  local language = buffer_language(buf)
+  if not language then
+    return nil
+  end
+  local data = run(buf, { "outline", "-", "--language", language })
+  if not data then
+    return nil
+  end
+  remember_heads(buf, data)
+  return HEADLINES[buf] and HEADLINES[buf].lines
+end
+
+-- A line you can see: not hidden inside a closed fold (a fold's own first
+-- line shows).
+local function visible(line)
+  local fs = vim.fn.foldclosed(line)
+  return fs == -1 or fs == line
+end
+
+-- Jump to the next (step = 1) or previous (step = -1) visible def, class or
+-- heading.
+local function jump_head(step)
+  local buf = vim.api.nvim_get_current_buf()
+  local lines = head_lines(buf)
+  if not lines then
+    return
+  end
+  local here = cursor_line()
+  local from, to = 1, #lines
+  if step < 0 then
+    from, to = #lines, 1
+  end
+  for i = from, to, step do
+    local l = lines[i]
+    if (step > 0 and l > here or step < 0 and l < here) and visible(l) then
+      vim.cmd("normal! m'") -- jumplist, so <C-o> goes back
+      vim.api.nvim_win_set_cursor(0, { l, 0 })
+      vim.cmd("normal! ^")
+      return
+    end
+  end
+  notify(step > 0 and "no heading below" or "no heading above")
+end
+
+function M.next_head()
+  jump_head(1)
+end
+
+function M.prev_head()
+  jump_head(-1)
 end
 
 -- opts.cmd       list, command that runs Curate (default: repo .venv, else PATH)
@@ -509,9 +584,11 @@ function M.setup(opts)
   if CONFIG.keymaps then
     local descs = {
       fold_next = "Curate: zoom out one scope",
-      fold_max = "Curate: fold the file one step (outline, then classes)",
+      fold_max = "Curate: fold the file one level (outline, then classes or sections)",
       unfold_next = "Curate: zoom in one scope",
-      unfold_all = "Curate: unfold the file one step (classes, then all)",
+      unfold_all = "Curate: unfold the file one level (back to the outline, then all)",
+      next_head = "Curate: next def, class or heading",
+      prev_head = "Curate: previous def, class or heading",
     }
     for action, key in pairs(CONFIG.keymaps) do
       if key and M[action] then

@@ -2,7 +2,7 @@
 Command-line interface for Curate.
 
     curate chain FILE --line N [--language NAME] [--producer treesitter]
-    curate outline FILE [--closed] [--language NAME] [--producer treesitter]
+    curate outline FILE [--level N] [--language NAME] [--producer treesitter]
 
 `chain` prints the structural path at a line as JSON, innermost first,
 and the scopes directly inside the innermost one ("children"; the line
@@ -18,9 +18,12 @@ lies between them).
 `outline` prints the line ranges to fold so only the skeleton shows
 (see curate.outline); they never overlap:
 
-    {"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}]}
+    {"folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}],
+     "level": 1, "levels": 2, "heads": [7, 11, 22, 23]}
 
-With --closed every entry folds whole, so a class is one line too.
+--level N folds further, one nesting level per step (level 2 in Python:
+classes whole too); "levels" is how many the file has. "heads" are the
+naming lines of every outline entry, for jumping between them.
 
 A scope or fold whose naming line is not its first line also has "head"
 (a decorated definition starts at its decorator; "head" is the `def`).
@@ -39,7 +42,7 @@ import sys
 
 from .compile import compile_scopes
 from .facts import Scope, ScopeSet
-from .outline import outline_folds
+from .outline import outline_folds, outline_levels
 from .relations import chain, children
 
 
@@ -130,15 +133,19 @@ def _cmd_chain(args: argparse.Namespace) -> int:
 
 def _cmd_outline(args: argparse.Namespace) -> int:
     scopes, kinds = _compile(args)
-    if args.closed:
-        kinds = {label: "closed" for label in kinds}
+    levels = outline_levels(scopes, kinds)
+    level = max(1, min(args.level, levels))
     # Every outline fold starts where an entry starts.
     heads = {s.span.start: s.head for s in scopes.scopes if s.head is not None}
+    entries = [s for s in scopes.scopes if s.label in kinds and s.address.depth > 0]
     print(json.dumps({
         "folds": [
             {"start": f.start, "end": f.end, **_head(heads.get(f.start, f.start), f.start)}
-            for f in outline_folds(scopes, kinds)
+            for f in outline_folds(scopes, kinds, level=level)
         ],
+        "level": level,
+        "levels": levels,
+        "heads": sorted({s.head_line for s in entries}),
     }))
     return 0
 
@@ -159,9 +166,10 @@ def main(argv: list[str] | None = None) -> int:
     p_outline.add_argument("--language", help="e.g. python, markdown (default: from the file suffix)")
     p_outline.add_argument("--producer", default="treesitter")
     p_outline.add_argument(
-        "--closed",
-        action="store_true",
-        help="fold every outline entry whole (classes too: one line each)",
+        "--level",
+        type=int,
+        default=1,
+        help="1: the outline; each step folds one nesting level more (default: 1)",
     )
     p_outline.set_defaults(func=_cmd_outline)
 
