@@ -1,16 +1,20 @@
 """outline_folds: language-free, on hand-made facts."""
 from __future__ import annotations
 
-from curate import RawFact, Span, outline_folds
+from curate import RawFact, Span, outline_folds, outline_levels
 from curate.curation import curate
 
 PYTHON = {"class": "open", "function": "closed"}
 MARKDOWN = {f"h{n}": "open" for n in range(1, 7)}
 
 
-def folds(facts, kinds):
+def folds(facts, kinds, level=1):
     scopes = curate([RawFact(label, Span(s, e)) for label, s, e in facts])
-    return [(f.start, f.end) for f in outline_folds(scopes, kinds)]
+    return [(f.start, f.end) for f in outline_folds(scopes, kinds, level=level)]
+
+
+def levels(facts, kinds):
+    return outline_levels(curate([RawFact(label, Span(s, e)) for label, s, e in facts]), kinds)
 
 
 def test_functions_fold_whole_and_hide_what_is_inside():
@@ -64,3 +68,31 @@ def test_folds_never_overlap():
     for (s1, e1), (s2, e2) in zip(out, out[1:]):
         assert e1 < s2
     assert out == [(1, 2), (3, 10), (12, 13), (14, 20), (22, 30)]
+
+
+# Levels: each step closes the deepest open entries that still show entries.
+
+MD = [("h1", 1, 16), ("h2", 5, 12), ("h3", 9, 12), ("h2", 13, 16), ("h1", 17, 19)]
+
+
+def test_markdown_folds_one_heading_level_per_step():
+    assert levels(MD, MARKDOWN) == 3
+    assert folds(MD, MARKDOWN, level=2) == [(1, 4), (5, 12), (13, 16), (17, 19)]
+    assert folds(MD, MARKDOWN, level=3) == [(1, 16), (17, 19)]
+
+
+def test_python_level_2_folds_classes_whole():
+    facts = [("function", 1, 5), ("class", 7, 20), ("function", 9, 12), ("function", 14, 20)]
+    assert levels(facts, PYTHON) == 2
+    assert folds(facts, PYTHON, level=2) == [(1, 5), (7, 20)]
+
+
+def test_entries_inside_closed_ones_do_not_add_levels():
+    # a class inside a function is hidden with it
+    facts = [("function", 1, 10), ("class", 2, 8), ("function", 3, 8)]
+    assert levels(facts, PYTHON) == 1
+
+
+def test_a_file_without_nesting_has_one_level():
+    assert levels([("function", 1, 5), ("function", 7, 9)], PYTHON) == 1
+    assert levels([], PYTHON) == 1

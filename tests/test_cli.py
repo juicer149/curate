@@ -106,9 +106,10 @@ def test_decorated_definitions_report_their_head(monkeypatch, capsys):
     src = "@dataclass\nclass A:\n    x: int\n\n    def m(self):\n        pass\n"
     monkeypatch.setattr("sys.stdin", io.StringIO(src))
     assert main(["outline", "-", "--language", "python"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "folds": [{"start": 1, "end": 4, "head": 2}, {"start": 5, "end": 6}],
-    }
+    assert json.loads(capsys.readouterr().out)["folds"] == [
+        {"start": 1, "end": 4, "head": 2},
+        {"start": 5, "end": 6},
+    ]
 
     monkeypatch.setattr("sys.stdin", io.StringIO(src))
     assert main(["chain", "-", "--line", "6", "--language", "python"]) == 0
@@ -125,24 +126,36 @@ def test_outline_python_fixture(capsys):
     assert main(["outline", str(FIXTURE)]) == 0
     assert json.loads(capsys.readouterr().out) == {
         "folds": [{"start": 7, "end": 19}, {"start": 23, "end": 24}],
+        "level": 1,
+        "levels": 2,
+        "heads": [7, 11, 22, 23],
     }
 
 
 @pytest.mark.treesitter
-def test_outline_closed_folds_classes_whole(capsys):
+def test_outline_level_2_folds_classes_whole(capsys):
     pytest.importorskip("tree_sitter_python")
-    assert main(["outline", str(FIXTURE), "--closed"]) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "folds": [{"start": 7, "end": 19}, {"start": 22, "end": 24}],
-    }
+    assert main(["outline", str(FIXTURE), "--level", "2"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["folds"] == [{"start": 7, "end": 19}, {"start": 22, "end": 24}]
+    assert out["level"] == 2
+
+    assert main(["outline", str(FIXTURE), "--level", "9"]) == 0
+    assert json.loads(capsys.readouterr().out)["level"] == 2  # clamped
 
 
 @pytest.mark.treesitter
 def test_outline_markdown_fixture(capsys):
     pytest.importorskip("tree_sitter_markdown")
     assert main(["outline", str(FIXTURES / "markdown_minimal.md")]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert [(f["start"], f["end"]) for f in out["folds"]] == [(1, 4), (5, 8), (9, 12), (13, 16), (17, 19)]
+    assert out["levels"] == 3
+    assert out["heads"] == [1, 5, 9, 13, 17]
+
+    assert main(["outline", str(FIXTURES / "markdown_minimal.md"), "--level", "2"]) == 0
     folds = json.loads(capsys.readouterr().out)["folds"]
-    assert [(f["start"], f["end"]) for f in folds] == [(1, 4), (5, 8), (9, 12), (13, 16), (17, 19)]
+    assert [(f["start"], f["end"]) for f in folds] == [(1, 4), (5, 12), (13, 16), (17, 19)]
 
 
 def test_outline_needs_a_language(monkeypatch, capsys):

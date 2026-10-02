@@ -48,8 +48,9 @@ local function expect(name, want)
 end
 
 local function case(name, fn)
-  cv.unfold_all()
-  cv.unfold_all() -- twice: U steps back from classes folded whole
+  for _ = 1, 4 do -- U steps back one outline level per press
+    cv.unfold_all()
+  end
   fn(function(step, want) expect(name .. ": " .. step, want) end)
 end
 
@@ -122,6 +123,46 @@ case("outline replaces earlier folds and u opens one", function(check)
   at(20); cv.fold_max(); check("F: outline only", "7-19 23-24")
   at(7); cv.unfold_next(); check("u on top()", "23-24")
 end)
+
+local function line_now()
+  return vim.api.nvim_win_get_cursor(0)[1]
+end
+
+local function equal_line(name, want)
+  count = count + 1
+  if line_now() ~= want then
+    failures = failures + 1
+    print(string.format("FAIL %s\n     want line %d\n     got  line %d", name, want, line_now()))
+  end
+end
+
+case("j/k jump between visible defs and classes", function(check)
+  cv.fold_max(); check("F: outline", "7-19 23-24")
+  at(1); cv.next_head(); equal_line("j from the top: top()", 7)
+  cv.next_head(); equal_line("j skips inner(), hidden in top()", 22)
+  cv.next_head(); equal_line("j: m()", 23)
+  cv.prev_head(); equal_line("k: back to class C", 22)
+  cv.unfold_all()
+  at(8); cv.next_head(); equal_line("j with nothing folded: inner()", 11)
+end)
+
+-- Markdown: F folds one heading level per press, U goes back.
+vim.o.hidden = true
+vim.cmd("edit " .. root .. "/tests/fixtures/markdown_minimal.md")
+vim.bo.filetype = "markdown"
+
+case("Markdown: F one heading level at a time, U back", function(check)
+  at(1); cv.fold_max(); check("F: every heading shows", "1-4 5-8 9-12 13-16 17-19")
+  cv.fold_max(); check("F: ### into ##", "1-4 5-12 13-16 17-19")
+  cv.fold_max(); check("F: ## into #", "1-16 17-19")
+  cv.fold_max(); check("F at the top: unchanged", "1-16 17-19")
+  cv.unfold_all(); check("U: ## back", "1-4 5-12 13-16 17-19")
+  cv.unfold_all(); check("U: ### back", "1-4 5-8 9-12 13-16 17-19")
+  cv.unfold_all(); check("U: everything open", "")
+end)
+
+vim.cmd("edit " .. root .. "/tests/fixtures/python_minimal.py")
+vim.bo.filetype = "python"
 
 -- Fold text: first line as in the buffer, then a dimmed line count.
 local function text_of(chunks)

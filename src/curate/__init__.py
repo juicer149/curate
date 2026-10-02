@@ -4,7 +4,7 @@ from .facts import Scope, ScopeSet, RawFact
 from .geometry import Span
 from .address import Address
 from .validate import validate_scope_set
-from .outline import outline_folds
+from .outline import outline_folds, outline_levels
 
 __all__ = [
     "compile_scopes",
@@ -15,4 +15,5 @@ __all__ = [
     "Address",
     "validate_scope_set",
     "outline_folds",
+    "outline_levels",
 ]
