@@ -433,9 +433,20 @@ function M.outline(level)
   if not language then
     return
   end
-  local data = run(buf, { "outline", "-", "--language", language, "--level", tostring(level) })
-  if not data or type(data.folds) ~= "table" then
-    return
+
+  -- The folds of every level up to `level`, outermost last. Each level's
+  -- folds wrap the ones before it as nested manual folds, so opening one
+  -- fold (zd, <leader>u) shows the level below it, not everything inside.
+  local layers, data = {}, nil
+  for lvl = 1, level do
+    data = run(buf, { "outline", "-", "--language", language, "--level", tostring(lvl) })
+    if not data or type(data.folds) ~= "table" then
+      return
+    end
+    table.insert(layers, data.folds)
+    if (data.levels or lvl) <= lvl then
+      break -- clamped: no further level
+    end
   end
 
   local line = cursor_line()
@@ -448,8 +459,16 @@ function M.outline(level)
     levels = data.levels or level,
   }
   remember_heads(buf, data)
-  for _, f in ipairs(data.folds) do
-    create_fold(fold_from_head(f))
+  local made = {}
+  for _, folds in ipairs(layers) do
+    for _, f in ipairs(folds) do
+      fold_from_head(f)
+      local key = f.start .. ":" .. f["end"]
+      if not made[key] then -- the same range on two levels is one fold
+        made[key] = true
+        create_fold(f)
+      end
+    end
   end
   pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
   if #data.folds == 0 then

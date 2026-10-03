@@ -108,6 +108,11 @@ case("F folds one step further, U one step back", function(check)
   cv.unfold_all(); check("U again: everything open", "")
 end)
 
+case("u on a class folded by F shows its methods", function(check)
+  cv.fold_max(); cv.fold_max(); check("F F: classes whole", "7-19 22-24")
+  at(22); cv.unfold_next(); check("u on class C: m() stays folded", "7-19 23-24")
+end)
+
 case("f between the scopes inside a function", function(check)
   at(14); cv.fold_next(); check("f on the blank line in top(): its scopes", "11-13 15-17")
   cv.fold_next(); check("f again: top() itself", "7-19")
@@ -159,6 +164,11 @@ case("Markdown: F one heading level at a time, U back", function(check)
   cv.unfold_all(); check("U: ## back", "1-4 5-12 13-16 17-19")
   cv.unfold_all(); check("U: ### back", "1-4 5-8 9-12 13-16 17-19")
   cv.unfold_all(); check("U: everything open", "")
+end)
+
+case("Markdown: u on a folded section opens one level", function(check)
+  at(1); cv.fold_max(); cv.fold_max(); check("F F: ### into ##", "1-4 5-12 13-16 17-19")
+  at(5); cv.unfold_next(); check("u on ## Install: its ### stays folded", "1-4 5-8 9-12 13-16 17-19")
 end)
 
 vim.cmd("edit " .. root .. "/tests/fixtures/python_minimal.py")
