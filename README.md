@@ -10,6 +10,8 @@ Zoom out from the cursor one scope at a time, fold the whole file level by
 level (functions, then classes; or `###`, then `##`), and jump between the
 definitions or headings that are visible. Python and Markdown for now.
 
+![Python: outline, then zoom out from a loop](docs/assets/python.gif)
+
 ## Quick start (Neovim)
 
 Needs Neovim 0.10+ and Python 3.10+. Neovim's own tree-sitter parsers are not
@@ -45,6 +47,8 @@ needed: curate parses with tree-sitter on the Python side.
 
 3. Open a `.py` or `.md` file and press `<leader>F` for its outline.
    The [keys](#keys) are below.
+
+## How it works
 
 ```
 source ──► producer ──► RawFact(label, span) ──► curate() ──► ScopeSet ──► consumer
