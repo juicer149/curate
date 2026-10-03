@@ -1,5 +1,3 @@
-"""A small order model, used for the curate demo."""
-
 from dataclasses import dataclass, field
 
 TAX_RATE = 0.25
