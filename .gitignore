@@ -37,3 +37,4 @@ luac.out
 .DS_Store
 .idea/
 .vscode/
+*.cast
