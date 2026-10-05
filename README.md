@@ -11,6 +11,7 @@ level (functions, then classes; or `###`, then `##`), and jump between the
 definitions or headings that are visible. Python and Markdown for now.
 
 ![Python: outline, then zoom out from a loop](docs/assets/python.gif)
+![Markdown: heading levels, then zoom out from a section](docs/assets/markdown.gif)
 
 ## Quick start (Neovim)
 
