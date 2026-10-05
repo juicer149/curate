@@ -8,8 +8,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "curate"
-version = "0.5.0"
-description = "Code and docs as nested scopes: a tree-sitter core that folds outward in Neovim, one scope at a time"
+version = "0.6.0"
+description = "Structure-aware folding and navigation for Neovim: zoom out from the cursor, fold a file level by level, jump between definitions. A language-agnostic core over tree-sitter."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
